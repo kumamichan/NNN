@@ -6,6 +6,7 @@
 <title>税理士提出書類まとめアプリ</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
 <style>
   :root{
     --ink:#1c2430;
@@ -243,6 +244,16 @@
     color:var(--danger);
     background:#fbeceb;
   }
+  .ocr-badge{
+    flex-shrink:0;
+    font-size:10.5px;
+    font-weight:700;
+    padding:2px 7px;
+    border-radius:20px;
+  }
+  .ocr-badge.running{background:#eef2f7;color:var(--navy);}
+  .ocr-badge.done{background:var(--ok-soft);color:var(--ok);}
+  .ocr-badge.error{background:#fbeceb;color:var(--danger);}
   .file-row-top .fsize{color:#9aa0a8;font-size:12px;flex-shrink:0;}
   .file-row-top button{
     border:none;
@@ -365,6 +376,12 @@
   }
   .btn-main:active{opacity:.85;}
   .btn-main:disabled{opacity:.4;cursor:not-allowed;}
+  .btn-main.btn-secondary{
+    background:#fff;
+    color:var(--navy);
+    border:1.5px solid var(--navy);
+    margin-top:10px;
+  }
 
   .status-line{
     margin-top:12px;
@@ -723,6 +740,95 @@ const DEFAULT_EXPENSE_TYPE = {
   creditcard: '雑費'
 };
 
+// keywords that, if found in the OCR'd receipt text, suggest an expense category
+const KEYWORD_CATEGORY_MAP = [
+  { keywords: ['飲食','居酒屋','レストラン','食事','会食','宴会','バー','カフェ','喫茶'], type:'接待交際費' },
+  { keywords: ['ガソリン','ENEOS','出光','コスモ','駐車場','タクシー','高速','ETC','電車','バス','パーキング'], type:'交通費' },
+  { keywords: ['電気','ガス代','水道','電力','ライフライン'], type:'水道光熱費' },
+  { keywords: ['携帯','電話','インターネット','通信','Wi-Fi','プロバイダ'], type:'通信費' },
+  { keywords: ['広告','チラシ','印刷','ポスター','宣伝'], type:'広告宣伝費' },
+  { keywords: ['家賃','賃料'], type:'地代家賃' },
+  { keywords: ['文房具','消耗品','用紙','インク','事務用品'], type:'消耗品費' },
+  { keywords: ['シャンプー','カラー剤','美容','薬剤','材料'], type:'材料費' }
+];
+
+function guessExpenseType(text){
+  for(const entry of KEYWORD_CATEGORY_MAP){
+    if(entry.keywords.some(k => text.includes(k))) return entry.type;
+  }
+  return null;
+}
+
+function guessAmount(text){
+  const withYenSuffix = [...text.matchAll(/([0-9][0-9,]{2,})\s*円/g)].map(m => parseInt(m[1].replace(/,/g,''), 10));
+  const withYenPrefix = [...text.matchAll(/¥\s*([0-9][0-9,]{2,})/g)].map(m => parseInt(m[1].replace(/,/g,''), 10));
+  const all = withYenSuffix.concat(withYenPrefix).filter(n => !isNaN(n) && n > 0);
+  if(all.length === 0) return null;
+  return Math.max(...all); // heuristic: the total is usually the largest yen figure on a receipt
+}
+
+let ocrQueue = [];
+let ocrProcessing = false;
+
+function enqueueOcr(bi, catId, fileId){
+  ocrQueue.push({bi, catId, fileId});
+  processOcrQueue();
+}
+
+async function processOcrQueue(){
+  if(ocrProcessing) return;
+  ocrProcessing = true;
+  while(ocrQueue.length){
+    const job = ocrQueue.shift();
+    await runOcrForFile(job.bi, job.catId, job.fileId);
+  }
+  ocrProcessing = false;
+}
+
+function findFileIndexById(bi, catId, fileId){
+  return businesses[bi].files[catId].findIndex(x => x._id === fileId);
+}
+
+async function runOcrForFile(bi, catId, fileId){
+  if(typeof Tesseract === 'undefined') return;
+  let idx = findFileIndexById(bi, catId, fileId);
+  if(idx === -1) return;
+  businesses[bi].files[catId][idx]._ocrStatus = 'running';
+  renderPanels(); switchTab(activeTab);
+
+  let text = '';
+  try{
+    const target = businesses[bi].files[catId][idx];
+    const result = await Tesseract.recognize(target, 'jpn+eng');
+    text = result.data.text || '';
+  } catch(e){
+    idx = findFileIndexById(bi, catId, fileId);
+    if(idx !== -1){
+      businesses[bi].files[catId][idx]._ocrStatus = 'error';
+      renderPanels(); switchTab(activeTab);
+    }
+    return;
+  }
+
+  idx = findFileIndexById(bi, catId, fileId);
+  if(idx === -1) return; // file was removed while OCR was running
+  const f = businesses[bi].files[catId][idx];
+  f._ocrText = text;
+  f._ocrStatus = 'done';
+  const guessedType = guessExpenseType(text);
+  const guessedAmount = guessAmount(text);
+  // only auto-apply the guessed category if the user hasn't already changed it away from the category's generic default
+  if(guessedType && f._expenseType === (DEFAULT_EXPENSE_TYPE[catId] || 'その他')){
+    f._expenseType = guessedType;
+  }
+  if(guessedAmount && (!f._amount || f._amount === '')){
+    f._amount = guessedAmount;
+  }
+  renderPanels();
+  switchTab(activeTab);
+  updateSummary(bi);
+}
+
 let businesses = [
   {name:'法人（タップして正式名称に編集）', files:{}, pdfs:{}},
   {name:'個人（タップして正式名称に編集）', files:{}, pdfs:{}}
@@ -788,9 +894,10 @@ function renderPanels(){
       ${CATEGORIES.map(cat => renderCategory(bi, cat)).join('')}
 
       <div class="bottom-actions">
-        <p>このタブの4種類をまとめてPDF化し、iPhoneの共有シートからメールに添付します。</p>
-        <button class="btn-main" onclick="generateAndShare(${bi})">まとめてPDF化して共有する</button>
-        <button class="link-btn" onclick="showShareDemo()">この操作で何が起きるか、サンプルで見る</button>
+        <p>レシートが増えるたびに「クラウドに保存」しておけば、毎月15日に自動でまとめて税理士事務所へ送信されます。今すぐ送りたい時は下の共有ボタンからその場でメール添付できます。</p>
+        <button class="btn-main" onclick="saveToCloud(${bi})">クラウドに保存する</button>
+        <button class="btn-main btn-secondary" onclick="generateAndShare(${bi})">まとめてPDF化して今すぐ共有する</button>
+        <button class="link-btn" onclick="showShareDemo()">共有すると何が起きるか、サンプルで見る</button>
         <div class="status-line" id="status${bi}"></div>
         <div class="individual-links" id="links${bi}"></div>
       </div>
@@ -823,6 +930,9 @@ function renderCategory(bi, cat){
             <div class="file-row-top">
               ${f._thumbUrl ? `<img class="thumb" src="${f._thumbUrl}" alt="">` : `<span class="thumb thumb-pdf">PDF</span>`}
               <span class="fname">${f.name}</span>
+              ${f._ocrStatus === 'running' ? '<span class="ocr-badge running">解析中…</span>' : ''}
+              ${f._ocrStatus === 'done' ? '<span class="ocr-badge done">自動入力</span>' : ''}
+              ${f._ocrStatus === 'error' ? '<span class="ocr-badge error">解析失敗</span>' : ''}
               <span class="fsize">${fmtSize(f.size)}</span>
               <button onclick="removeFile(${bi}, '${cat.id}', ${fi})">削除</button>
             </div>
@@ -878,6 +988,74 @@ function updateAmount(bi, catId, fi, val){
 function updateType(bi, catId, fi, val){
   businesses[bi].files[catId][fi]._expenseType = val;
   updateSummary(bi);
+}
+
+function arrayBufferToBase64(bytes){
+  let binary = '';
+  const chunkSize = 0x8000;
+  for(let i = 0; i < bytes.length; i += chunkSize){
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function saveToCloud(bi){
+  const statusEl = document.getElementById('status'+bi);
+  const url = document.getElementById('gasUrl').value.trim();
+  if(!url){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = '設定画面でスプレッドシート/クラウド連携のURLを入力してください。';
+    return;
+  }
+
+  const year = document.getElementById('reportYear').value;
+  const month = document.getElementById('reportMonth').value;
+  const bizName = (businesses[bi].name || '').trim() || (bi===0 ? '法人' : '個人');
+
+  statusEl.className = 'status-line';
+  statusEl.textContent = 'クラウドにPDFを保存しています...';
+
+  let uploaded = 0;
+  try{
+    for(const cat of CATEGORIES){
+      if(businesses[bi].files[cat.id].length === 0) continue;
+      let pdfData = businesses[bi].pdfs[cat.id];
+      if(!pdfData){
+        pdfData = await buildPdfForCategory(bi, cat.id);
+        businesses[bi].pdfs[cat.id] = pdfData;
+      }
+      const base64 = arrayBufferToBase64(pdfData.bytes);
+      const fname = pdfFileName(bi, cat.label);
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {'Content-Type': 'text/plain'},
+        body: JSON.stringify({
+          action: 'uploadPdf',
+          business: bizName,
+          year, month,
+          fileName: fname,
+          base64
+        })
+      });
+      uploaded++;
+    }
+  } catch(e){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = '保存に失敗しました。通信環境やURLをご確認ください。';
+    return;
+  }
+
+  renderPanels();
+  switchTab(activeTab);
+
+  if(uploaded === 0){
+    document.getElementById('status'+bi).className = 'status-line error';
+    document.getElementById('status'+bi).textContent = '保存できるファイルがありません。';
+    return;
+  }
+  document.getElementById('status'+bi).className = 'status-line ok';
+  document.getElementById('status'+bi).textContent = `${uploaded}件のPDFをクラウドに保存しました（15日に自動送信されます）。`;
 }
 
 async function recordToSpreadsheet(){
@@ -945,11 +1123,17 @@ async function addFiles(bi, catId, fileList){
     if(rawFile.type && rawFile.type.startsWith('image/')){
       finalFile = await cropImageInteractive(rawFile);
     }
+    finalFile._id = 'f' + Date.now() + Math.random().toString(36).slice(2);
     finalFile._amount = '';
     finalFile._expenseType = DEFAULT_EXPENSE_TYPE[catId] || 'その他';
     // create a thumbnail URL once and cache it on the file object (cheap: no data copy, browser just references the blob)
     finalFile._thumbUrl = (finalFile.type && finalFile.type.startsWith('image/')) ? URL.createObjectURL(finalFile) : null;
     arr.push(finalFile);
+
+    if(catId !== 'passbook' && finalFile.type && finalFile.type.startsWith('image/') && typeof Tesseract !== 'undefined'){
+      finalFile._ocrStatus = 'queued';
+      enqueueOcr(bi, catId, finalFile._id);
+    }
   }
   businesses[bi].pdfs[catId] = null; // invalidate previous pdf for this category
   renderPanels();
