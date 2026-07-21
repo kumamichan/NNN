@@ -254,6 +254,34 @@
   .ocr-badge.running{background:#eef2f7;color:var(--navy);}
   .ocr-badge.done{background:var(--ok-soft);color:var(--ok);}
   .ocr-badge.error{background:#fbeceb;color:var(--danger);}
+
+  .bulk-check{
+    flex-shrink:0;
+    width:19px;
+    height:19px;
+    accent-color: var(--clay);
+  }
+  .bulk-apply{
+    margin-top:14px;
+    padding:12px;
+    background:#f6f5f2;
+    border:1px dashed var(--clay);
+    border-radius:10px;
+  }
+  .bulk-apply-hint{
+    font-size:11.5px;
+    color:#8a6a4a;
+    margin:0 0 8px;
+  }
+  .bulk-apply-row{
+    display:flex;
+    gap:8px;
+    margin-bottom:8px;
+    flex-wrap:wrap;
+  }
+  .bulk-apply-row:last-child{margin-bottom:0;}
+  .bulk-apply-row .amount-input{width:100px;}
+  .bulk-apply-row .type-select{flex:1;min-width:120px;}
   .file-row-top .fsize{color:#9aa0a8;font-size:12px;flex-shrink:0;}
   .file-row-top button{
     border:none;
@@ -967,9 +995,10 @@ function renderCategory(bi, cat){
       </label>
       ${hasHeic ? '<div class="heic-warn">HEIC形式のファイルが含まれています。PDF化に失敗する場合は「写真」から選び直してください。</div>' : ''}
       <ul class="file-list">
-        ${files.map((f, fi) => `
+        ${files.map((f, fi) => ({f, fi})).slice().reverse().map(({f, fi}) => `
           <li>
             <div class="file-row-top">
+              ${cat.id !== 'passbook' ? `<input type="checkbox" class="bulk-check" ${f._selected ? 'checked' : ''} onchange="toggleSelect(${bi}, '${cat.id}', ${fi}, this.checked)">` : ''}
               ${f._thumbUrl ? `<img class="thumb" src="${f._thumbUrl}" alt="">` : `<span class="thumb thumb-pdf">PDF</span>`}
               <span class="fname">${f.name}</span>
               ${f._ocrStatus === 'running' ? '<span class="ocr-badge running">解析中…</span>' : ''}
@@ -988,6 +1017,21 @@ function renderCategory(bi, cat){
           </li>
         `).join('')}
       </ul>
+      ${cat.id !== 'passbook' && files.length > 0 ? `
+      <div class="bulk-apply">
+        <p class="bulk-apply-hint">同じ金額・科目が続く場合（駐車場代など）は、チェックを付けてまとめて入力できます。</p>
+        <div class="bulk-apply-row">
+          <button class="btn-small" onclick="selectAllInCategory(${bi}, '${cat.id}', true)">全て選択</button>
+          <button class="btn-small" onclick="selectAllInCategory(${bi}, '${cat.id}', false)">選択解除</button>
+        </div>
+        <div class="bulk-apply-row">
+          <input type="number" inputmode="numeric" class="amount-input" id="bulkAmt-${bi}-${cat.id}" placeholder="金額（円）">
+          <select class="type-select" id="bulkType-${bi}-${cat.id}">
+            ${EXPENSE_TYPES.map(t => `<option value="${t}">${t}</option>`).join('')}
+          </select>
+          <button class="btn-small" onclick="applyBulkToCategory(${bi}, '${cat.id}')">選択項目に適用</button>
+        </div>
+      </div>` : ''}
       <div class="category-actions">
         <button class="btn-small" ${files.length===0?'disabled':''} onclick="generateCategoryPdf(${bi}, '${cat.id}')">このカテゴリだけPDF化</button>
         ${pdfReady ? `<span class="pdf-ready">✓ PDF作成済み（${pdfReady.pageCount}ページ）</span>` : ''}
@@ -1020,6 +1064,34 @@ function generateSummaryHTML(bi){
 function updateSummary(bi){
   const el = document.getElementById('summary'+bi);
   if(el) el.innerHTML = generateSummaryHTML(bi);
+}
+
+function toggleSelect(bi, catId, fi, checked){
+  businesses[bi].files[catId][fi]._selected = checked;
+}
+
+function selectAllInCategory(bi, catId, checked){
+  businesses[bi].files[catId].forEach(f => f._selected = checked);
+  renderPanels();
+  switchTab(activeTab);
+}
+
+function applyBulkToCategory(bi, catId){
+  const amtInput = document.getElementById(`bulkAmt-${bi}-${catId}`);
+  const typeSelect = document.getElementById(`bulkType-${bi}-${catId}`);
+  const amt = amtInput.value;
+  const type = typeSelect.value;
+  let count = 0;
+  businesses[bi].files[catId].forEach(f => {
+    if(f._selected){
+      if(amt !== '') f._amount = amt;
+      f._expenseType = type;
+      count++;
+    }
+  });
+  renderPanels();
+  switchTab(activeTab);
+  updateSummary(bi);
 }
 
 function updateAmount(bi, catId, fi, val){
@@ -1217,6 +1289,7 @@ async function addFiles(bi, catId, fileList){
     finalFile._id = 'f' + Date.now() + Math.random().toString(36).slice(2);
     finalFile._amount = '';
     finalFile._expenseType = DEFAULT_EXPENSE_TYPE[catId] || 'その他';
+    finalFile._selected = false;
     // create a thumbnail URL once and cache it on the file object (cheap: no data copy, browser just references the blob)
     finalFile._thumbUrl = (finalFile.type && finalFile.type.startsWith('image/')) ? URL.createObjectURL(finalFile) : null;
     arr.push(finalFile);
