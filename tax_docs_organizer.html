@@ -382,6 +382,7 @@
     border:1.5px solid var(--navy);
     margin-top:10px;
   }
+  .send-now-btn{margin-top:12px;}
 
   .status-line{
     margin-top:12px;
@@ -420,6 +421,16 @@
     font-size:17px;
     margin:4px 0 16px;
     color:var(--navy);
+  }
+  .danger-card{border-color:var(--danger);}
+  .danger-hint{
+    font-size:12px;
+    color:#8a4a40;
+    margin:0 0 12px;
+    line-height:1.5;
+  }
+  .btn-danger{
+    background:var(--danger);
   }
 
   .crop-modal{
@@ -613,6 +624,8 @@
         <select id="reportYear" onchange="renderPanels(); switchTab(activeTab);"></select>
         <select id="reportMonth" onchange="renderPanels(); switchTab(activeTab);"></select>
       </div>
+      <button class="btn-main btn-secondary send-now-btn" onclick="sendMonthNow()">この年月の分を今すぐ税理士へ送る</button>
+      <div class="status-line" id="sendNowStatus"></div>
     </div>
 
     <div class="tabs">
@@ -642,6 +655,13 @@
         <button onclick="recordToSpreadsheet()">記録する</button>
       </div>
       <div class="status-line" id="sheetStatus"></div>
+    </div>
+
+    <div class="accountant-card danger-card">
+      <label>アップロード内容のリセット</label>
+      <p class="danger-hint">法人・個人どちらのタブも、現在アップロード中の写真・PDF・金額入力をすべて消去します。クラウドやスプレッドシートに既に保存済みのデータには影響しません。</p>
+      <button class="btn-main btn-danger" onclick="resetAllData()">写真・PDFをすべてリセットする</button>
+      <div class="status-line" id="resetStatus"></div>
     </div>
 
     <button class="btn-main" onclick="hideSettings()">アプリ画面に戻る</button>
@@ -853,6 +873,28 @@ function hideShareDemo(){
   document.getElementById('shareDemoModal').classList.remove('active');
 }
 
+function resetAllData(){
+  const ok = confirm('法人・個人どちらのタブも、現在アップロード中の写真・PDF・金額入力をすべて消去します。よろしいですか？（クラウドやスプレッドシートに保存済みのデータは消えません）');
+  if(!ok) return;
+
+  businesses.forEach(biz => {
+    CATEGORIES.forEach(cat => {
+      biz.files[cat.id].forEach(f => {
+        if(f._thumbUrl) URL.revokeObjectURL(f._thumbUrl);
+      });
+      biz.files[cat.id] = [];
+      biz.pdfs[cat.id] = null;
+    });
+  });
+
+  renderPanels();
+  switchTab(activeTab);
+
+  const statusEl = document.getElementById('resetStatus');
+  statusEl.className = 'status-line ok';
+  statusEl.textContent = 'アップロード内容をすべてリセットしました。';
+}
+
 function showSettings(){
   document.getElementById('mainView').style.display = 'none';
   document.getElementById('settingsView').style.display = 'block';
@@ -988,6 +1030,39 @@ function updateAmount(bi, catId, fi, val){
 function updateType(bi, catId, fi, val){
   businesses[bi].files[catId][fi]._expenseType = val;
   updateSummary(bi);
+}
+
+async function sendMonthNow(){
+  const statusEl = document.getElementById('sendNowStatus');
+  const url = document.getElementById('gasUrl').value.trim();
+  if(!url){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = '設定画面でGASのウェブアプリURLを入力してください。';
+    return;
+  }
+  const year = document.getElementById('reportYear').value;
+  const month = document.getElementById('reportMonth').value;
+  const monthLabel = year + '年' + month + '月';
+
+  const ok = confirm(monthLabel + '分として、クラウドに保存済みのPDFを今すぐ税理士事務所へメール送信します。よろしいですか？');
+  if(!ok) return;
+
+  statusEl.className = 'status-line';
+  statusEl.textContent = '送信をリクエストしています...';
+
+  try{
+    await fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify({ action: 'sendNow', year, month })
+    });
+    statusEl.className = 'status-line ok';
+    statusEl.textContent = monthLabel + '分の送信をリクエストしました。数分後、税理士事務所に届いているかご確認ください。';
+  } catch(e){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = '送信リクエストに失敗しました。通信環境やURLをご確認ください。';
+  }
 }
 
 function arrayBufferToBase64(bytes){
