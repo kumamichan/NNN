@@ -936,7 +936,7 @@ function renderPanels(){
       ${CATEGORIES.map(cat => renderCategory(bi, cat)).join('')}
 
       <div class="bottom-actions">
-        <p>レシートが増えるたびに「クラウドに保存」しておけば、毎月15日に自動でまとめて税理士事務所へ送信されます。今すぐ送りたい時は下の共有ボタンからその場でメール添付できます。</p>
+        <p>レシートが増えるたびに「クラウドに保存」しておけば、PDFがドライブに、金額はスプレッドシートに記録され、毎月15日に自動でまとめて税理士事務所へ送信されます。今すぐ送りたい時は下の共有ボタンからその場でメール添付できます。</p>
         <button class="btn-main" onclick="saveToCloud(${bi})">クラウドに保存する</button>
         <button class="btn-main btn-secondary" onclick="generateAndShare(${bi})">まとめてPDF化して今すぐ共有する</button>
         <button class="link-btn" onclick="showShareDemo()">共有すると何が起きるか、サンプルで見る</button>
@@ -1074,6 +1074,27 @@ function arrayBufferToBase64(bytes){
   return btoa(binary);
 }
 
+function collectExpenseRows(bi, year, month){
+  const biz = businesses[bi];
+  const rows = [];
+  CATEGORIES.forEach(cat => {
+    if(cat.id === 'passbook') return;
+    biz.files[cat.id].forEach(f => {
+      const amt = parseFloat(f._amount) || 0;
+      if(amt === 0) return;
+      rows.push({
+        year, month,
+        business: biz.name,
+        category: cat.label,
+        expenseType: f._expenseType || 'その他',
+        amount: amt,
+        fileName: f.name
+      });
+    });
+  });
+  return rows;
+}
+
 async function saveToCloud(bi){
   const statusEl = document.getElementById('status'+bi);
   const url = document.getElementById('gasUrl').value.trim();
@@ -1115,6 +1136,17 @@ async function saveToCloud(bi){
       });
       uploaded++;
     }
+
+    // also record this business's entered amounts as expense rows in the spreadsheet
+    const rows = collectExpenseRows(bi, year, month);
+    if(rows.length > 0){
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {'Content-Type': 'text/plain'},
+        body: JSON.stringify({ rows })
+      });
+    }
   } catch(e){
     statusEl.className = 'status-line error';
     statusEl.textContent = '保存に失敗しました。通信環境やURLをご確認ください。';
@@ -1129,8 +1161,9 @@ async function saveToCloud(bi){
     document.getElementById('status'+bi).textContent = '保存できるファイルがありません。';
     return;
   }
+  const rowCount = collectExpenseRows(bi, year, month).length;
   document.getElementById('status'+bi).className = 'status-line ok';
-  document.getElementById('status'+bi).textContent = `${uploaded}件のPDFをクラウドに保存しました（15日に自動送信されます）。`;
+  document.getElementById('status'+bi).textContent = `${uploaded}件のPDFをクラウドに保存し、${rowCount}件の金額をスプレッドシートに記録しました（15日に自動送信されます）。`;
 }
 
 async function recordToSpreadsheet(){
@@ -1143,24 +1176,7 @@ async function recordToSpreadsheet(){
   }
   const year = document.getElementById('reportYear').value;
   const month = document.getElementById('reportMonth').value;
-  const rows = [];
-  businesses.forEach(biz => {
-    CATEGORIES.forEach(cat => {
-      if(cat.id === 'passbook') return;
-      biz.files[cat.id].forEach(f => {
-        const amt = parseFloat(f._amount) || 0;
-        if(amt === 0) return;
-        rows.push({
-          year, month,
-          business: biz.name,
-          category: cat.label,
-          expenseType: f._expenseType || 'その他',
-          amount: amt,
-          fileName: f.name
-        });
-      });
-    });
-  });
+  const rows = businesses.flatMap((biz, bi) => collectExpenseRows(bi, year, month));
   if(rows.length === 0){
     statusEl.className = 'status-line error';
     statusEl.textContent = '金額が入力された項目がありません。各ファイルに金額を入力してください。';
