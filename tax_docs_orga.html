@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>税理士提出書類まとめアプリ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+<style>
+  :root{
+    --ink:#1c2430;
+    --paper:#f6f5f2;
+    --panel:#ffffff;
+    --line:#dfe1e6;
+    --navy:#1f3a5f;
+    --navy-dark:#152a45;
+    --clay:#b5622f;
+    --clay-soft:#f2e2d5;
+    --ok:#2f7d5a;
+    --ok-soft:#e3f2ea;
+    --danger:#b3432f;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",system-ui,-apple-system,sans-serif;
+    line-height:1.6;
+    -webkit-tap-highlight-color:transparent;
+  }
+  header.app-head{
+    background:linear-gradient(135deg,var(--navy) 0%,var(--navy-dark) 100%);
+    color:#fff;
+    padding:28px 20px 22px;
+    position:relative;
+  }
+  .settings-btn{
+    position:absolute;
+    top:18px;
+    right:16px;
+    background:rgba(255,255,255,.15);
+    border:1px solid rgba(255,255,255,.4);
+    color:#fff;
+    border-radius:20px;
+    padding:7px 13px;
+    font-size:12.5px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  header.app-head .eyebrow{
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    opacity:.72;
+    margin-bottom:6px;
+  }
+  header.app-head h1{
+    margin:0;
+    font-size:22px;
+    font-weight:700;
+    letter-spacing:.01em;
+  }
+  header.app-head p{
+    margin:8px 0 0;
+    font-size:13.5px;
+    opacity:.85;
+    max-width:640px;
+  }
+
+  .wrap{max-width:720px;margin:0 auto;padding:18px 16px 60px;}
+
+  .accountant-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:16px 0 22px;
+  }
+  .accountant-card label{
+    display:block;
+    font-size:12.5px;
+    font-weight:700;
+    color:var(--navy);
+    margin-bottom:6px;
+  }
+  .accountant-row{display:flex;gap:8px;}
+  .accountant-row input,
+  .accountant-row select{
+    flex:1;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    font-size:15px;
+    background:#fbfbfa;
+    color:var(--ink);
+  }
+  .accountant-row button{
+    flex-shrink:0;
+    border:none;
+    background:var(--navy);
+    color:#fff;
+    border-radius:10px;
+    padding:0 16px;
+    font-size:13.5px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .accountant-row button:active{opacity:.8;}
+
+  .tabs{
+    display:flex;
+    gap:8px;
+    margin-bottom:18px;
+    position:sticky;
+    top:0;
+    background:var(--paper);
+    padding:10px 0;
+    z-index:5;
+  }
+  .tab-btn{
+    flex:1;
+    padding:12px 8px;
+    border-radius:12px;
+    border:1.5px solid var(--line);
+    background:var(--panel);
+    font-size:14.5px;
+    font-weight:700;
+    color:#5a6270;
+    cursor:pointer;
+    text-align:center;
+    transition:all .15s ease;
+  }
+  .tab-btn.active{
+    border-color:var(--navy);
+    background:var(--navy);
+    color:#fff;
+  }
+
+  .business-panel{display:none;}
+  .business-panel.active{display:block;}
+
+  .biz-name-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .biz-name-row input{
+    flex:1;
+    font-size:18px;
+    font-weight:700;
+    padding:10px 4px;
+    border:none;
+    border-bottom:2px solid var(--clay);
+    background:transparent;
+    color:var(--ink);
+  }
+  .biz-name-row input:focus{outline:none;border-bottom-color:var(--navy);}
+  .biz-name-hint{font-size:11.5px;color:#8a8f98;margin:-10px 0 18px 4px;}
+
+  .category{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:14px;
+  }
+  .category-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:10px;
+  }
+  .category-head h3{
+    margin:0;
+    font-size:15px;
+    font-weight:700;
+  }
+  .category-head .count{
+    font-size:12px;
+    color:#8a8f98;
+    font-weight:600;
+  }
+  .file-input-label{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:9px 14px;
+    border-radius:10px;
+    background:var(--clay-soft);
+    color:var(--clay);
+    font-size:13.5px;
+    font-weight:700;
+    cursor:pointer;
+    border:1px dashed var(--clay);
+  }
+  .file-input-label input{display:none;}
+  .file-input-label.camera-label{
+    margin-left:8px;
+    background:var(--ok-soft);
+    color:var(--ok);
+    border-color:var(--ok);
+  }
+
+  ul.file-list{
+    list-style:none;
+    margin:12px 0 0;
+    padding:0;
+  }
+  ul.file-list li{
+    padding:8px 0;
+    border-top:1px solid var(--line);
+  }
+  .file-row-top{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-size:13.5px;
+  }
+  .file-row-top .fname{
+    flex:1;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .thumb{
+    width:40px;
+    height:40px;
+    object-fit:cover;
+    border-radius:7px;
+    flex-shrink:0;
+    background:#eee;
+    border:1px solid var(--line);
+  }
+  .thumb-pdf{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:10px;
+    font-weight:800;
+    color:var(--danger);
+    background:#fbeceb;
+  }
+  .ocr-badge{
+    flex-shrink:0;
+    font-size:10.5px;
+    font-weight:700;
+    padding:2px 7px;
+    border-radius:20px;
+  }
+  .ocr-badge.running{background:#eef2f7;color:var(--navy);}
+  .ocr-badge.done{background:var(--ok-soft);color:var(--ok);}
+  .ocr-badge.error{background:#fbeceb;color:var(--danger);}
+  .file-row-top .fsize{color:#9aa0a8;font-size:12px;flex-shrink:0;}
+  .file-row-top button{
+    border:none;
+    background:none;
+    color:var(--danger);
+    font-size:12.5px;
+    font-weight:700;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .file-row-bottom{
+    display:flex;
+    gap:8px;
+    margin-top:6px;
+  }
+  .amount-input{
+    width:110px;
+    flex-shrink:0;
+    padding:7px 9px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:13px;
+    background:#fbfbfa;
+  }
+  .type-select{
+    flex:1;
+    padding:7px 9px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:13px;
+    background:#fff;
+  }
+  .summary-card{
+    background:var(--ok-soft);
+    border:1px solid var(--ok);
+    border-radius:var(--radius);
+    padding:14px 16px;
+    margin-bottom:16px;
+  }
+  .summary-card h4{
+    margin:0 0 8px;
+    font-size:13.5px;
+    color:var(--ok);
+    font-weight:700;
+  }
+  .summary-row{
+    display:flex;
+    justify-content:space-between;
+    font-size:13px;
+    padding:3px 0;
+    color:#365b48;
+  }
+  .summary-row.muted{color:#7a8a80;font-style:italic;}
+  .summary-row.total{
+    font-weight:700;
+    font-size:14.5px;
+    border-top:1px solid var(--ok);
+    margin-top:6px;
+    padding-top:6px;
+    color:var(--ok);
+  }
+  .heic-warn{
+    margin-top:8px;
+    font-size:12px;
+    color:var(--clay);
+    background:var(--clay-soft);
+    padding:6px 10px;
+    border-radius:8px;
+  }
+
+  .category-actions{
+    display:flex;
+    gap:8px;
+    margin-top:12px;
+    flex-wrap:wrap;
+  }
+  .btn-small{
+    border:1px solid var(--line);
+    background:#fbfbfa;
+    color:var(--navy);
+    padding:8px 12px;
+    border-radius:9px;
+    font-size:12.5px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .btn-small:disabled{opacity:.4;cursor:not-allowed;}
+  .pdf-ready{
+    font-size:12.5px;
+    color:var(--ok);
+    font-weight:700;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+
+  .bottom-actions{
+    margin-top:22px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:18px;
+    text-align:center;
+  }
+  .bottom-actions p{
+    margin:0 0 14px;
+    font-size:13px;
+    color:#5a6270;
+  }
+  .btn-main{
+    width:100%;
+    border:none;
+    background:var(--navy);
+    color:#fff;
+    padding:15px;
+    border-radius:12px;
+    font-size:15.5px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .btn-main:active{opacity:.85;}
+  .btn-main:disabled{opacity:.4;cursor:not-allowed;}
+  .btn-main.btn-secondary{
+    background:#fff;
+    color:var(--navy);
+    border:1.5px solid var(--navy);
+    margin-top:10px;
+  }
+  .send-now-btn{margin-top:12px;}
+
+  .status-line{
+    margin-top:12px;
+    font-size:12.5px;
+    color:#6b7280;
+    min-height:16px;
+  }
+  .status-line.error{color:var(--danger);font-weight:700;}
+  .status-line.ok{color:var(--ok);font-weight:700;}
+
+  .individual-links{
+    margin-top:12px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    align-items:center;
+  }
+  .individual-links a{
+    font-size:13px;
+    color:var(--navy);
+    text-decoration:underline;
+  }
+
+  footer.note{
+    max-width:720px;
+    margin:26px auto 0;
+    padding:0 16px 20px;
+    font-size:11.5px;
+    color:#9aa0a8;
+    text-align:center;
+  }
+
+  .settings-view{display:none;}
+  .settings-view.active{display:block;}
+  .settings-title{
+    font-size:17px;
+    margin:4px 0 16px;
+    color:var(--navy);
+  }
+  .danger-card{border-color:var(--danger);}
+  .danger-hint{
+    font-size:12px;
+    color:#8a4a40;
+    margin:0 0 12px;
+    line-height:1.5;
+  }
+  .btn-danger{
+    background:var(--danger);
+  }
+
+  .crop-modal{
+    position:fixed;
+    inset:0;
+    background:rgba(15,20,28,.78);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:200;
+    padding:16px;
+  }
+  .crop-modal.active{display:flex;}
+  .crop-modal-inner{
+    background:#fff;
+    border-radius:16px;
+    padding:16px;
+    max-width:420px;
+    width:100%;
+  }
+  .crop-hint{
+    font-size:12.5px;
+    color:#5a6270;
+    margin:0 0 12px;
+  }
+  .crop-canvas-wrap{
+    position:relative;
+    margin:0 auto;
+    touch-action:none;
+    background:#eee;
+    border-radius:6px;
+    overflow:hidden;
+  }
+  .crop-canvas-wrap canvas{
+    display:block;
+  }
+  .crop-rect-overlay{
+    position:absolute;
+    border:2px solid var(--clay);
+    background:rgba(181,98,47,0.18);
+    touch-action:none;
+  }
+  .crop-handle{
+    position:absolute;
+    width:24px;
+    height:24px;
+    background:var(--clay);
+    border-radius:50%;
+    border:3px solid #fff;
+    box-shadow:0 1px 3px rgba(0,0,0,.35);
+    transform:translate(-50%,-50%);
+    touch-action:none;
+  }
+  #handleTL{left:0%;top:0%;}
+  #handleTR{left:100%;top:0%;}
+  #handleBL{left:0%;top:100%;}
+  #handleBR{left:100%;top:100%;}
+  .crop-actions{
+    display:flex;
+    gap:8px;
+    margin-top:16px;
+  }
+  .crop-actions button{flex:1;}
+
+  .link-btn{
+    display:block;
+    width:100%;
+    background:none;
+    border:none;
+    color:var(--navy);
+    font-size:12.5px;
+    font-weight:700;
+    text-decoration:underline;
+    padding:10px 0 0;
+    cursor:pointer;
+  }
+
+  .share-demo-inner{max-width:380px;max-height:85vh;overflow-y:auto;}
+  .demo-title{
+    margin:0 0 16px;
+    font-size:15.5px;
+    color:var(--navy);
+  }
+  .demo-step{
+    display:flex;
+    gap:10px;
+    margin-bottom:16px;
+    font-size:13px;
+  }
+  .demo-step-num{
+    flex-shrink:0;
+    width:22px;
+    height:22px;
+    border-radius:50%;
+    background:var(--navy);
+    color:#fff;
+    font-size:12px;
+    font-weight:700;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .demo-files{
+    margin-top:8px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .demo-file{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:11.5px;
+    background:#f6f5f2;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:6px 8px;
+  }
+  .demo-file-icon{
+    background:var(--danger);
+    color:#fff;
+    font-size:9px;
+    font-weight:800;
+    padding:2px 5px;
+    border-radius:4px;
+    flex-shrink:0;
+  }
+  .demo-sheet{
+    margin-top:8px;
+    background:#1c1c1e;
+    border-radius:14px;
+    padding:14px 10px 10px;
+  }
+  .demo-sheet-files{
+    color:#aeb0b5;
+    font-size:11px;
+    text-align:center;
+    margin-bottom:12px;
+  }
+  .demo-app-row{
+    display:flex;
+    justify-content:space-between;
+    gap:4px;
+  }
+  .demo-app{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:4px;
+    font-size:9.5px;
+    color:#d7d8db;
+  }
+  .demo-app-icon{
+    width:34px;
+    height:34px;
+    border-radius:9px;
+    background:#3a3a3c;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:16px;
+  }
+  .demo-app.selected .demo-app-icon{
+    background:var(--clay);
+    box-shadow:0 0 0 2px var(--clay);
+  }
+  .demo-app.selected{color:#fff;font-weight:700;}
+  .demo-footnote{
+    font-size:11px;
+    color:#9aa0a8;
+    margin:4px 0 0;
+  }
+</style>
+</head>
+<body>
+
+<header class="app-head">
+  <button class="settings-btn" onclick="showSettings()">⚙ 設定</button>
+  <h1>税理士提出書類まとめアプリ</h1>
+  <p>通帳コピー・請求書・領収書・クレジットカード利用明細を、事業ごとに分けてPDF化。まとめてスマホの共有機能でメール添付できます。</p>
+</header>
+
+<div class="wrap">
+
+  <div id="mainView">
+
+    <div class="accountant-card">
+      <label>対象年月（月次報告用・PDFファイル名に使われます）</label>
+      <div class="accountant-row">
+        <select id="reportYear" onchange="renderPanels(); switchTab(activeTab);"></select>
+        <select id="reportMonth" onchange="renderPanels(); switchTab(activeTab);"></select>
+      </div>
+      <button class="btn-main btn-secondary send-now-btn" onclick="sendMonthNow()">この年月の分を今すぐ税理士へ送る</button>
+      <div class="status-line" id="sendNowStatus"></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" id="tabBtn0" onclick="switchTab(0)">法人</button>
+      <button class="tab-btn" id="tabBtn1" onclick="switchTab(1)">個人</button>
+    </div>
+
+    <div id="panels"></div>
+
+  </div>
+
+  <div id="settingsView" class="settings-view">
+    <h2 class="settings-title">設定</h2>
+
+    <div class="accountant-card">
+      <label>税理士事務所のメールアドレス（メモ用・コピーして使えます）</label>
+      <div class="accountant-row">
+        <input type="text" id="accountantEmail" placeholder="例）tax-office@example.com">
+        <button onclick="copyEmail()">コピー</button>
+      </div>
+    </div>
+
+    <div class="accountant-card">
+      <label>スプレッドシート連携（GASのウェブアプリURL）</label>
+      <div class="accountant-row">
+        <input type="text" id="gasUrl" placeholder="例）https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbxz-2vtgXIN5m9gN9-a7OOw--YGDtJJPfQSasbmZbLH47zgvHSzL04Q3EQUeLUfvVyq/exec">
+        <button onclick="recordToSpreadsheet()">記録する</button>
+      </div>
+      <div class="status-line" id="sheetStatus"></div>
+    </div>
+
+    <div class="accountant-card danger-card">
+      <label>アップロード内容のリセット</label>
+      <p class="danger-hint">法人・個人どちらのタブも、現在アップロード中の写真・PDF・金額入力をすべて消去します。クラウドやスプレッドシートに既に保存済みのデータには影響しません。</p>
+      <button class="btn-main btn-danger" onclick="resetAllData()">写真・PDFをすべてリセットする</button>
+      <div class="status-line" id="resetStatus"></div>
+    </div>
+
+    <button class="btn-main" onclick="hideSettings()">アプリ画面に戻る</button>
+  </div>
+
+</div>
+
+<footer class="note">
+  ファイルはこの画面を閉じるまでの一時的な処理です。サーバーには保存されません。作成したPDFは必ず端末に保存・送信してください。<br>
+  ※iPhoneの写真がHEIC形式のままだとPDF変換に失敗する場合があります。うまくいかない時は「写真」から選び直すか、カメラで撮影した画像をご利用ください。
+</footer>
+
+<div class="crop-modal" id="cropModal">
+  <div class="crop-modal-inner">
+    <p class="crop-hint">四隅の●をドラッグしてレシートの範囲を選んでください。枠内を拡大保存します。</p>
+    <div class="crop-canvas-wrap" id="cropCanvasWrap">
+      <canvas id="cropCanvas"></canvas>
+      <div class="crop-rect-overlay" id="cropRectOverlay">
+        <div class="crop-handle" id="handleTL"></div>
+        <div class="crop-handle" id="handleTR"></div>
+        <div class="crop-handle" id="handleBL"></div>
+        <div class="crop-handle" id="handleBR"></div>
+      </div>
+    </div>
+    <div class="crop-actions">
+      <button class="btn-small" onclick="skipCrop()">切り抜かずそのまま使う</button>
+      <button class="btn-main" onclick="confirmCrop()">この範囲を拡大して保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="crop-modal" id="shareDemoModal">
+  <div class="crop-modal-inner share-demo-inner">
+    <h3 class="demo-title">「まとめてPDF化して共有する」を押すと…</h3>
+
+    <div class="demo-step">
+      <span class="demo-step-num">1</span>
+      <div>
+        <b>4種類のPDFが自動で作られます</b>
+        <div class="demo-files">
+          <div class="demo-file"><span class="demo-file-icon">PDF</span>法人_通帳コピー_202607.pdf</div>
+          <div class="demo-file"><span class="demo-file-icon">PDF</span>法人_請求書_202607.pdf</div>
+          <div class="demo-file"><span class="demo-file-icon">PDF</span>法人_領収書_202607.pdf</div>
+          <div class="demo-file"><span class="demo-file-icon">PDF</span>法人_クレジットカード利用明細_202607.pdf</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-step">
+      <span class="demo-step-num">2</span>
+      <div>
+        <b>iPhoneの共有シートが開きます</b>
+        <div class="demo-sheet">
+          <div class="demo-sheet-files">4個のPDFファイル</div>
+          <div class="demo-app-row">
+            <div class="demo-app"><div class="demo-app-icon">💬</div>Message</div>
+            <div class="demo-app"><div class="demo-app-icon">📱</div>LINE</div>
+            <div class="demo-app selected"><div class="demo-app-icon">✉️</div>メール</div>
+            <div class="demo-app"><div class="demo-app-icon">📝</div>メモ</div>
+            <div class="demo-app"><div class="demo-app-icon">•••</div>その他</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-step">
+      <span class="demo-step-num">3</span>
+      <div><b>「メール」を選ぶと、4つのPDFが添付された状態でメール作成画面が開きます</b></div>
+    </div>
+
+    <div class="demo-step">
+      <span class="demo-step-num">4</span>
+      <div><b>宛先に税理士事務所のメールアドレスを入力して送信すれば完了です</b>（設定画面でコピーしたアドレスを貼り付けてください）</div>
+    </div>
+
+    <p class="demo-footnote">※これはイメージ図です。実際の画面はiPhoneの機種やOSのバージョンによって多少見た目が異なります。</p>
+
+    <div class="crop-actions">
+      <button class="btn-main" onclick="hideShareDemo()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const CATEGORIES = [
+  {id:'passbook', label:'通帳コピー'},
+  {id:'invoice', label:'請求書'},
+  {id:'receipt', label:'領収書'},
+  {id:'creditcard', label:'クレジットカード利用明細'}
+];
+
+const EXPENSE_TYPES = ['売上','仕入高','消耗品費','材料費','水道光熱費','通信費','広告宣伝費','交通費','接待交際費','地代家賃','雑費','その他'];
+const DEFAULT_EXPENSE_TYPE = {
+  invoice: '仕入高',
+  receipt: '消耗品費',
+  creditcard: '雑費'
+};
+
+// keywords that, if found in the OCR'd receipt text, suggest an expense category
+const KEYWORD_CATEGORY_MAP = [
+  { keywords: ['飲食','居酒屋','レストラン','食事','会食','宴会','バー','カフェ','喫茶'], type:'接待交際費' },
+  { keywords: ['ガソリン','ENEOS','出光','コスモ','駐車場','タクシー','高速','ETC','電車','バス','パーキング'], type:'交通費' },
+  { keywords: ['電気','ガス代','水道','電力','ライフライン'], type:'水道光熱費' },
+  { keywords: ['携帯','電話','インターネット','通信','Wi-Fi','プロバイダ'], type:'通信費' },
+  { keywords: ['広告','チラシ','印刷','ポスター','宣伝'], type:'広告宣伝費' },
+  { keywords: ['家賃','賃料'], type:'地代家賃' },
+  { keywords: ['文房具','消耗品','用紙','インク','事務用品'], type:'消耗品費' },
+  { keywords: ['シャンプー','カラー剤','美容','薬剤','材料'], type:'材料費' }
+];
+
+function guessExpenseType(text){
+  for(const entry of KEYWORD_CATEGORY_MAP){
+    if(entry.keywords.some(k => text.includes(k))) return entry.type;
+  }
+  return null;
+}
+
+function guessAmount(text){
+  const withYenSuffix = [...text.matchAll(/([0-9][0-9,]{2,})\s*円/g)].map(m => parseInt(m[1].replace(/,/g,''), 10));
+  const withYenPrefix = [...text.matchAll(/¥\s*([0-9][0-9,]{2,})/g)].map(m => parseInt(m[1].replace(/,/g,''), 10));
+  const all = withYenSuffix.concat(withYenPrefix).filter(n => !isNaN(n) && n > 0);
+  if(all.length === 0) return null;
+  return Math.max(...all); // heuristic: the total is usually the largest yen figure on a receipt
+}
+
+let ocrQueue = [];
+let ocrProcessing = false;
+
+function enqueueOcr(bi, catId, fileId){
+  ocrQueue.push({bi, catId, fileId});
+  processOcrQueue();
+}
+
+async function processOcrQueue(){
+  if(ocrProcessing) return;
+  ocrProcessing = true;
+  while(ocrQueue.length){
+    const job = ocrQueue.shift();
+    await runOcrForFile(job.bi, job.catId, job.fileId);
+  }
+  ocrProcessing = false;
+}
+
+function findFileIndexById(bi, catId, fileId){
+  return businesses[bi].files[catId].findIndex(x => x._id === fileId);
+}
+
+async function runOcrForFile(bi, catId, fileId){
+  if(typeof Tesseract === 'undefined') return;
+  let idx = findFileIndexById(bi, catId, fileId);
+  if(idx === -1) return;
+  businesses[bi].files[catId][idx]._ocrStatus = 'running';
+  renderPanels(); switchTab(activeTab);
+
+  let text = '';
+  try{
+    const target = businesses[bi].files[catId][idx];
+    const result = await Tesseract.recognize(target, 'jpn+eng');
+    text = result.data.text || '';
+  } catch(e){
+    idx = findFileIndexById(bi, catId, fileId);
+    if(idx !== -1){
+      businesses[bi].files[catId][idx]._ocrStatus = 'error';
+      renderPanels(); switchTab(activeTab);
+    }
+    return;
+  }
+
+  idx = findFileIndexById(bi, catId, fileId);
+  if(idx === -1) return; // file was removed while OCR was running
+  const f = businesses[bi].files[catId][idx];
+  f._ocrText = text;
+  f._ocrStatus = 'done';
+  const guessedType = guessExpenseType(text);
+  const guessedAmount = guessAmount(text);
+  // only auto-apply the guessed category if the user hasn't already changed it away from the category's generic default
+  if(guessedType && f._expenseType === (DEFAULT_EXPENSE_TYPE[catId] || 'その他')){
+    f._expenseType = guessedType;
+  }
+  if(guessedAmount && (!f._amount || f._amount === '')){
+    f._amount = guessedAmount;
+  }
+  renderPanels();
+  switchTab(activeTab);
+  updateSummary(bi);
+}
+
+let businesses = [
+  {name:'法人（タップして正式名称に編集）', files:{}, pdfs:{}},
+  {name:'個人（タップして正式名称に編集）', files:{}, pdfs:{}}
+];
+businesses.forEach(b => CATEGORIES.forEach(c => b.files[c.id] = []));
+
+let activeTab = 0;
+
+function switchTab(i){
+  activeTab = i;
+  document.getElementById('tabBtn0').classList.toggle('active', i===0);
+  document.getElementById('tabBtn1').classList.toggle('active', i===1);
+  document.getElementById('panel0').classList.toggle('active', i===0);
+  document.getElementById('panel1').classList.toggle('active', i===1);
+}
+
+function showShareDemo(){
+  document.getElementById('shareDemoModal').classList.add('active');
+}
+
+function hideShareDemo(){
+  document.getElementById('shareDemoModal').classList.remove('active');
+}
+
+function resetAllData(){
+  const ok = confirm('法人・個人どちらのタブも、現在アップロード中の写真・PDF・金額入力をすべて消去します。よろしいですか？（クラウドやスプレッドシートに保存済みのデータは消えません）');
+  if(!ok) return;
+
+  businesses.forEach(biz => {
+    CATEGORIES.forEach(cat => {
+      biz.files[cat.id].forEach(f => {
+        if(f._thumbUrl) URL.revokeObjectURL(f._thumbUrl);
+      });
+      biz.files[cat.id] = [];
+      biz.pdfs[cat.id] = null;
+    });
+  });
+
+  renderPanels();
+  switchTab(activeTab);
+
+  const statusEl = document.getElementById('resetStatus');
+  statusEl.className = 'status-line ok';
+  statusEl.textContent = 'アップロード内容をすべてリセットしました。';
+}
+
+function showSettings(){
+  document.getElementById('mainView').style.display = 'none';
+  document.getElementById('settingsView').style.display = 'block';
+}
+
+function hideSettings(){
+  document.getElementById('settingsView').style.display = 'none';
+  document.getElementById('mainView').style.display = 'block';
+}
+
+function copyEmail(){
+  const val = document.getElementById('accountantEmail').value.trim();
+  if(!val){ return; }
+  navigator.clipboard.writeText(val).then(()=>{
+    const btn = document.querySelector('.accountant-row button');
+    const orig = btn.textContent;
+    btn.textContent = 'コピーしました';
+    setTimeout(()=>btn.textContent = orig, 1500);
+  });
+}
+
+function fmtSize(bytes){
+  if(bytes < 1024) return bytes + 'B';
+  if(bytes < 1024*1024) return Math.round(bytes/1024) + 'KB';
+  return (bytes/1024/1024).toFixed(1) + 'MB';
+}
+
+function renderPanels(){
+  const container = document.getElementById('panels');
+  container.innerHTML = businesses.map((biz, bi) => `
+    <div class="business-panel ${bi===0?'active':''}" id="panel${bi}">
+      <div class="biz-name-row">
+        <input type="text" value="${biz.name}" oninput="renameBusiness(${bi}, this.value)">
+      </div>
+      <div class="biz-name-hint">↑ ここに実際の会社名・屋号を入力してください（PDFのファイル名にも使われます）</div>
+
+      <div class="summary-card" id="summary${bi}">${generateSummaryHTML(bi)}</div>
+
+      ${CATEGORIES.map(cat => renderCategory(bi, cat)).join('')}
+
+      <div class="bottom-actions">
+        <p>レシートが増えるたびに「クラウドに保存」しておけば、毎月15日に自動でまとめて税理士事務所へ送信されます。今すぐ送りたい時は下の共有ボタンからその場でメール添付できます。</p>
+        <button class="btn-main" onclick="saveToCloud(${bi})">クラウドに保存する</button>
+        <button class="btn-main btn-secondary" onclick="generateAndShare(${bi})">まとめてPDF化して今すぐ共有する</button>
+        <button class="link-btn" onclick="showShareDemo()">共有すると何が起きるか、サンプルで見る</button>
+        <div class="status-line" id="status${bi}"></div>
+        <div class="individual-links" id="links${bi}"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderCategory(bi, cat){
+  const files = businesses[bi].files[cat.id];
+  const hasHeic = files.some(f => /heic|heif/i.test(f.type) || /\.heic$|\.heif$/i.test(f.name));
+  const pdfReady = businesses[bi].pdfs[cat.id];
+  return `
+    <div class="category">
+      <div class="category-head">
+        <h3>${cat.label}</h3>
+        <span class="count">${files.length}件</span>
+      </div>
+      <label class="file-input-label">
+        写真・PDFを選択
+        <input type="file" accept="image/*,application/pdf" multiple onchange="addFiles(${bi}, '${cat.id}', this.files)">
+      </label>
+      <label class="file-input-label camera-label">
+        カメラで撮影
+        <input type="file" accept="image/*" capture="environment" onchange="addFiles(${bi}, '${cat.id}', this.files)">
+      </label>
+      ${hasHeic ? '<div class="heic-warn">HEIC形式のファイルが含まれています。PDF化に失敗する場合は「写真」から選び直してください。</div>' : ''}
+      <ul class="file-list">
+        ${files.map((f, fi) => `
+          <li>
+            <div class="file-row-top">
+              ${f._thumbUrl ? `<img class="thumb" src="${f._thumbUrl}" alt="">` : `<span class="thumb thumb-pdf">PDF</span>`}
+              <span class="fname">${f.name}</span>
+              ${f._ocrStatus === 'running' ? '<span class="ocr-badge running">解析中…</span>' : ''}
+              ${f._ocrStatus === 'done' ? '<span class="ocr-badge done">自動入力</span>' : ''}
+              ${f._ocrStatus === 'error' ? '<span class="ocr-badge error">解析失敗</span>' : ''}
+              <span class="fsize">${fmtSize(f.size)}</span>
+              <button onclick="removeFile(${bi}, '${cat.id}', ${fi})">削除</button>
+            </div>
+            ${cat.id !== 'passbook' ? `
+            <div class="file-row-bottom">
+              <input type="number" inputmode="numeric" class="amount-input" placeholder="金額（円）" value="${f._amount || ''}" oninput="updateAmount(${bi}, '${cat.id}', ${fi}, this.value)">
+              <select class="type-select" onchange="updateType(${bi}, '${cat.id}', ${fi}, this.value)">
+                ${EXPENSE_TYPES.map(t => `<option value="${t}" ${f._expenseType===t?'selected':''}>${t}</option>`).join('')}
+              </select>
+            </div>` : ''}
+          </li>
+        `).join('')}
+      </ul>
+      <div class="category-actions">
+        <button class="btn-small" ${files.length===0?'disabled':''} onclick="generateCategoryPdf(${bi}, '${cat.id}')">このカテゴリだけPDF化</button>
+        ${pdfReady ? `<span class="pdf-ready">✓ PDF作成済み（${pdfReady.pageCount}ページ）</span>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function generateSummaryHTML(bi){
+  const totals = {};
+  let grand = 0;
+  CATEGORIES.forEach(cat => {
+    if(cat.id === 'passbook') return;
+    businesses[bi].files[cat.id].forEach(f => {
+      const amt = parseFloat(f._amount) || 0;
+      const type = f._expenseType || 'その他';
+      totals[type] = (totals[type] || 0) + amt;
+      grand += amt;
+    });
+  });
+  const keys = Object.keys(totals).sort((a,b) => totals[b] - totals[a]);
+  const rows = keys.map(k => `<div class="summary-row"><span>${k}</span><span>¥${Math.round(totals[k]).toLocaleString()}</span></div>`).join('');
+  return `
+    <h4>今月の集計</h4>
+    ${rows || '<div class="summary-row muted">まだ金額が入力されていません</div>'}
+    <div class="summary-row total"><span>合計</span><span>¥${Math.round(grand).toLocaleString()}</span></div>
+  `;
+}
+
+function updateSummary(bi){
+  const el = document.getElementById('summary'+bi);
+  if(el) el.innerHTML = generateSummaryHTML(bi);
+}
+
+function updateAmount(bi, catId, fi, val){
+  businesses[bi].files[catId][fi]._amount = val;
+  updateSummary(bi);
+}
+
+function updateType(bi, catId, fi, val){
+  businesses[bi].files[catId][fi]._expenseType = val;
+  updateSummary(bi);
+}
+
+async function sendMonthNow(){
+  const statusEl = document.getElementById('sendNowStatus');
+  const url = document.getElementById('gasUrl').value.trim();
+  if(!url){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = '設定画面でGASのウェブアプリURLを入力してください。';
+    return;
+  }
+  const year = document.getElementById('reportYear').value;
+  const month = document.getElementById('reportMonth').value;
+  const monthLabel = year + '年' + month + '月';
+
+  const ok = confirm(monthLabel + '分として、クラウドに保存済みのPDFを今すぐ税理士事務所へメール送信します。よろしいですか？');
+  if(!ok) return;
+
+  statusEl.className = 'status-line';
+  statusEl.textContent = '送信をリクエストしています...';
+
+  try{
+    await fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify({ action: 'sendNow', year, month })
+    });
+    statusEl.className = 'status-line ok';
+    statusEl.textContent = monthLabel + '分の送信をリクエストしました。数分後、税理士事務所に届いているかご確認ください。';
+  } catch(e){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = '送信リクエストに失敗しました。通信環境やURLをご確認ください。';
+  }
+}
+
+function arrayBufferToBase64(bytes){
+  let binary = '';
+  const chunkSize = 0x8000;
+  for(let i = 0; i < bytes.length; i += chunkSize){
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function saveToCloud(bi){
+  const statusEl = document.getElementById('status'+bi);
+  const url = document.getElementById('gasUrl').value.trim();
+  if(!url){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = '設定画面でスプレッドシート/クラウド連携のURLを入力してください。';
+    return;
+  }
+
+  const year = document.getElementById('reportYear').value;
+  const month = document.getElementById('reportMonth').value;
+  const bizName = (businesses[bi].name || '').trim() || (bi===0 ? '法人' : '個人');
+
+  statusEl.className = 'status-line';
+  statusEl.textContent = 'クラウドにPDFを保存しています...';
+
+  let uploaded = 0;
+  try{
+    for(const cat of CATEGORIES){
+      if(businesses[bi].files[cat.id].length === 0) continue;
+      let pdfData = businesses[bi].pdfs[cat.id];
+      if(!pdfData){
+        pdfData = await buildPdfForCategory(bi, cat.id);
+        businesses[bi].pdfs[cat.id] = pdfData;
+      }
+      const base64 = arrayBufferToBase64(pdfData.bytes);
+      const fname = pdfFileName(bi, cat.label);
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {'Content-Type': 'text/plain'},
+        body: JSON.stringify({
+          action: 'uploadPdf',
+          business: bizName,
+          year, month,
+          fileName: fname,
+          base64
+        })
+      });
+      uploaded++;
+    }
+  } catch(e){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = '保存に失敗しました。通信環境やURLをご確認ください。';
+    return;
+  }
+
+  renderPanels();
+  switchTab(activeTab);
+
+  if(uploaded === 0){
+    document.getElementById('status'+bi).className = 'status-line error';
+    document.getElementById('status'+bi).textContent = '保存できるファイルがありません。';
+    return;
+  }
+  document.getElementById('status'+bi).className = 'status-line ok';
+  document.getElementById('status'+bi).textContent = `${uploaded}件のPDFをクラウドに保存しました（15日に自動送信されます）。`;
+}
+
+async function recordToSpreadsheet(){
+  const statusEl = document.getElementById('sheetStatus');
+  const url = document.getElementById('gasUrl').value.trim();
+  if(!url){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = 'スプレッドシートのウェブアプリURLを入力してください。';
+    return;
+  }
+  const year = document.getElementById('reportYear').value;
+  const month = document.getElementById('reportMonth').value;
+  const rows = [];
+  businesses.forEach(biz => {
+    CATEGORIES.forEach(cat => {
+      if(cat.id === 'passbook') return;
+      biz.files[cat.id].forEach(f => {
+        const amt = parseFloat(f._amount) || 0;
+        if(amt === 0) return;
+        rows.push({
+          year, month,
+          business: biz.name,
+          category: cat.label,
+          expenseType: f._expenseType || 'その他',
+          amount: amt,
+          fileName: f.name
+        });
+      });
+    });
+  });
+  if(rows.length === 0){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = '金額が入力された項目がありません。各ファイルに金額を入力してください。';
+    return;
+  }
+  statusEl.className = 'status-line';
+  statusEl.textContent = `${rows.length}件のデータを送信しています...`;
+  try{
+    await fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify({rows})
+    });
+    statusEl.className = 'status-line ok';
+    statusEl.textContent = `${rows.length}件をスプレッドシートに送信しました。スプレッドシート側で反映を確認してください。`;
+  } catch(e){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = '送信に失敗しました。URLや通信環境を確認してください。';
+  }
+}
+
+function renameBusiness(bi, val){
+  businesses[bi].name = val;
+  // update tab label with a short version
+  const short = val.trim() ? val.trim().slice(0,8) : (bi===0 ? '法人' : '個人');
+  document.getElementById('tabBtn'+bi).textContent = short;
+}
+
+async function addFiles(bi, catId, fileList){
+  const arr = businesses[bi].files[catId];
+  const filesArr = Array.from(fileList);
+  for(const rawFile of filesArr){
+    let finalFile = rawFile;
+    if(rawFile.type && rawFile.type.startsWith('image/')){
+      finalFile = await cropImageInteractive(rawFile);
+    }
+    finalFile._id = 'f' + Date.now() + Math.random().toString(36).slice(2);
+    finalFile._amount = '';
+    finalFile._expenseType = DEFAULT_EXPENSE_TYPE[catId] || 'その他';
+    // create a thumbnail URL once and cache it on the file object (cheap: no data copy, browser just references the blob)
+    finalFile._thumbUrl = (finalFile.type && finalFile.type.startsWith('image/')) ? URL.createObjectURL(finalFile) : null;
+    arr.push(finalFile);
+
+    if(catId !== 'passbook' && finalFile.type && finalFile.type.startsWith('image/') && typeof Tesseract !== 'undefined'){
+      finalFile._ocrStatus = 'queued';
+      enqueueOcr(bi, catId, finalFile._id);
+    }
+  }
+  businesses[bi].pdfs[catId] = null; // invalidate previous pdf for this category
+  renderPanels();
+  switchTab(activeTab);
+}
+
+function removeFile(bi, catId, fi){
+  const f = businesses[bi].files[catId][fi];
+  if(f && f._thumbUrl) URL.revokeObjectURL(f._thumbUrl);
+  businesses[bi].files[catId].splice(fi, 1);
+  businesses[bi].pdfs[catId] = null;
+  renderPanels();
+  switchTab(activeTab);
+}
+
+async function buildPdfForCategory(bi, catId){
+  const files = businesses[bi].files[catId];
+  if(files.length === 0) return null;
+
+  const { PDFDocument } = PDFLib;
+  const pdfDoc = await PDFDocument.create();
+  const pageW = 595.28, pageH = 841.89, margin = 24;
+
+  for(const file of files){
+    const bytes = await file.arrayBuffer();
+    if(file.type === 'application/pdf'){
+      const srcDoc = await PDFDocument.load(bytes, {ignoreEncryption:true});
+      const pages = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+      pages.forEach(p => pdfDoc.addPage(p));
+    } else {
+      let img;
+      try{
+        if(file.type === 'image/png'){
+          img = await pdfDoc.embedPng(bytes);
+        } else {
+          img = await pdfDoc.embedJpg(bytes);
+        }
+      } catch(e){
+        throw new Error(`「${file.name}」の読み込みに失敗しました。HEIC形式の可能性があります。`);
+      }
+      const maxW = pageW - margin*2, maxH = pageH - margin*2;
+      const scale = Math.min(maxW/img.width, maxH/img.height, 1);
+      const w = img.width*scale, h = img.height*scale;
+      const page = pdfDoc.addPage([pageW, pageH]);
+      page.drawImage(img, {x:(pageW-w)/2, y:(pageH-h)/2, width:w, height:h});
+    }
+  }
+  const pdfBytes = await pdfDoc.save();
+  return {bytes: pdfBytes, pageCount: pdfDoc.getPageCount()};
+}
+
+function pdfFileName(bi, catLabel){
+  const fallback = bi===0 ? '法人' : '個人';
+  const bizName = (businesses[bi].name || fallback).trim() || fallback;
+  const ym = document.getElementById('reportYear').value + document.getElementById('reportMonth').value.padStart(2,'0');
+  const safeBiz = bizName.replace(/[\\/:*?"<>|]/g, '_');
+  return `${safeBiz}_${catLabel}_${ym}.pdf`;
+}
+
+async function generateCategoryPdf(bi, catId){
+  const statusEl = document.getElementById('status'+bi);
+  const cat = CATEGORIES.find(c => c.id === catId);
+  try{
+    statusEl.className = 'status-line';
+    statusEl.textContent = `${cat.label}のPDFを作成中...`;
+    const result = await buildPdfForCategory(bi, catId);
+    businesses[bi].pdfs[catId] = result;
+    statusEl.className = 'status-line ok';
+    statusEl.textContent = `${cat.label}のPDFができました（${result.pageCount}ページ）`;
+    renderPanels();
+    switchTab(activeTab);
+  } catch(e){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = e.message || 'PDF作成に失敗しました。';
+  }
+}
+
+async function generateAndShare(bi){
+  const statusEl = document.getElementById('status'+bi);
+  const linksEl = document.getElementById('links'+bi);
+  linksEl.innerHTML = '';
+  statusEl.className = 'status-line';
+  statusEl.textContent = 'PDFを作成しています...';
+
+  const filesToShare = [];
+  try{
+    for(const cat of CATEGORIES){
+      if(businesses[bi].files[cat.id].length === 0) continue;
+      let pdfData = businesses[bi].pdfs[cat.id];
+      if(!pdfData){
+        pdfData = await buildPdfForCategory(bi, cat.id);
+        businesses[bi].pdfs[cat.id] = pdfData;
+      }
+      const fname = pdfFileName(bi, cat.label);
+      filesToShare.push(new File([pdfData.bytes], fname, {type:'application/pdf'}));
+    }
+  } catch(e){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = e.message || 'PDF作成に失敗しました。';
+    return;
+  }
+
+  if(filesToShare.length === 0){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = 'ファイルが1件もアップロードされていません。';
+    return;
+  }
+
+  renderPanels();
+  switchTab(activeTab);
+
+  // Try native share (best on iPhone: opens share sheet, choose Mail, attaches files)
+  if(navigator.canShare && navigator.canShare({files: filesToShare})){
+    try{
+      await navigator.share({
+        files: filesToShare,
+        title: (businesses[bi].name || '事業') + ' 提出書類',
+        text: (businesses[bi].name || '事業') + ' の提出書類一式です。'
+      });
+      document.getElementById('status'+bi).className = 'status-line ok';
+      document.getElementById('status'+bi).textContent = '共有シートを開きました。「メール」を選んで送信してください。';
+      return;
+    } catch(e){
+      // user cancelled or share failed — fall through to manual links
+    }
+  }
+
+  // Fallback: zip + individual download links
+  document.getElementById('status'+bi).className = 'status-line ok';
+  document.getElementById('status'+bi).textContent = 'この端末では共有機能が使えないため、個別にダウンロードしてください。';
+
+  const zip = new JSZip();
+  filesToShare.forEach(f => zip.file(f.name, f));
+  const zipBlob = await zip.generateAsync({type:'blob'});
+  const zipUrl = URL.createObjectURL(zipBlob);
+
+  const linksContainer = document.getElementById('links'+bi);
+  const zipLink = document.createElement('a');
+  zipLink.href = zipUrl;
+  zipLink.download = pdfFileName(bi, 'まとめて').replace('.pdf', '.zip');
+  zipLink.textContent = 'まとめてZIPをダウンロード';
+  linksContainer.appendChild(zipLink);
+
+  filesToShare.forEach(f => {
+    const url = URL.createObjectURL(f);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = f.name;
+    a.textContent = f.name + ' を個別にダウンロード';
+    linksContainer.appendChild(a);
+  });
+}
+
+function initReportPeriod(){
+  const now = new Date();
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth()+1;
+  const yearSel = document.getElementById('reportYear');
+  const monthSel = document.getElementById('reportMonth');
+  for(let y = 2050; y >= curYear-1; y--){
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = y + '年';
+    if(y === curYear) opt.selected = true;
+    yearSel.appendChild(opt);
+  }
+  for(let m = 1; m <= 12; m++){
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = m + '月';
+    if(m === curMonth) opt.selected = true;
+    monthSel.appendChild(opt);
+  }
+}
+
+let cropState = null;
+let cropResolve = null;
+
+function cropImageInteractive(file){
+  return new Promise((resolve) => {
+    const objUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const modal = document.getElementById('cropModal');
+      const canvas = document.getElementById('cropCanvas');
+      const wrap = document.getElementById('cropCanvasWrap');
+      const maxDisplay = Math.min(360, window.innerWidth - 64);
+      const scale = Math.min(maxDisplay / img.naturalWidth, 1);
+      const dw = Math.round(img.naturalWidth * scale);
+      const dh = Math.round(img.naturalHeight * scale);
+      canvas.width = dw;
+      canvas.height = dh;
+      wrap.style.width = dw + 'px';
+      wrap.style.height = dh + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, dw, dh);
+
+      const marginX = dw * 0.08, marginY = dh * 0.08;
+      cropState = {
+        x: marginX, y: marginY,
+        w: dw - marginX*2, h: dh - marginY*2,
+        dw, dh, img, file
+      };
+      updateOverlayDOM();
+
+      cropResolve = (result) => {
+        URL.revokeObjectURL(objUrl);
+        modal.classList.remove('active');
+        cropState = null;
+        resolve(result);
+      };
+      modal.classList.add('active');
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objUrl);
+      resolve(file); // couldn't decode (e.g. HEIC) — fall back to original, uncropped
+    };
+    img.src = objUrl;
+  });
+}
+
+function updateOverlayDOM(){
+  const overlay = document.getElementById('cropRectOverlay');
+  overlay.style.left = cropState.x + 'px';
+  overlay.style.top = cropState.y + 'px';
+  overlay.style.width = cropState.w + 'px';
+  overlay.style.height = cropState.h + 'px';
+}
+
+function cropPointerPos(e){
+  const wrap = document.getElementById('cropCanvasWrap');
+  const rect = wrap.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function setupCropHandlers(){
+  const overlay = document.getElementById('cropRectOverlay');
+
+  overlay.addEventListener('pointerdown', (e) => {
+    if(e.target !== overlay) return; // let handles manage their own drags
+    if(!cropState) return;
+    e.preventDefault();
+    overlay.setPointerCapture(e.pointerId);
+    const start = cropPointerPos(e);
+    const orig = {x:cropState.x, y:cropState.y};
+    const onMove = (ev) => {
+      const p = cropPointerPos(ev);
+      const dx = p.x - start.x, dy = p.y - start.y;
+      cropState.x = Math.max(0, Math.min(cropState.dw - cropState.w, orig.x + dx));
+      cropState.y = Math.max(0, Math.min(cropState.dh - cropState.h, orig.y + dy));
+      updateOverlayDOM();
+    };
+    const onUp = () => {
+      overlay.removeEventListener('pointermove', onMove);
+      overlay.removeEventListener('pointerup', onUp);
+    };
+    overlay.addEventListener('pointermove', onMove);
+    overlay.addEventListener('pointerup', onUp);
+  });
+
+  ['TL','TR','BL','BR'].forEach(corner => {
+    const handle = document.getElementById('handle'+corner);
+    handle.addEventListener('pointerdown', (e) => {
+      if(!cropState) return;
+      e.preventDefault();
+      e.stopPropagation();
+      handle.setPointerCapture(e.pointerId);
+      const start = cropPointerPos(e);
+      const orig = {x:cropState.x, y:cropState.y, w:cropState.w, h:cropState.h};
+      const minSize = 40;
+      const onMove = (ev) => {
+        const p = cropPointerPos(ev);
+        const dx = p.x - start.x, dy = p.y - start.y;
+        let {x,y,w,h} = orig;
+        if(corner === 'TL'){
+          x = Math.min(orig.x+orig.w-minSize, orig.x+dx);
+          y = Math.min(orig.y+orig.h-minSize, orig.y+dy);
+          w = orig.x+orig.w - x;
+          h = orig.y+orig.h - y;
+        } else if(corner === 'TR'){
+          y = Math.min(orig.y+orig.h-minSize, orig.y+dy);
+          w = Math.max(minSize, orig.w+dx);
+          h = orig.y+orig.h - y;
+        } else if(corner === 'BL'){
+          x = Math.min(orig.x+orig.w-minSize, orig.x+dx);
+          w = orig.x+orig.w - x;
+          h = Math.max(minSize, orig.h+dy);
+        } else if(corner === 'BR'){
+          w = Math.max(minSize, orig.w+dx);
+          h = Math.max(minSize, orig.h+dy);
+        }
+        x = Math.max(0, x);
+        y = Math.max(0, y);
+        w = Math.min(w, cropState.dw - x);
+        h = Math.min(h, cropState.dh - y);
+        cropState.x = x; cropState.y = y; cropState.w = w; cropState.h = h;
+        updateOverlayDOM();
+      };
+      const onUp = () => {
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+      };
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', onUp);
+    });
+  });
+}
+
+function skipCrop(){
+  if(cropResolve) cropResolve(cropState.file);
+}
+
+function confirmCrop(){
+  if(!cropState) return;
+  const {x, y, w, h, dw, img, file} = cropState;
+  const scaleFactor = img.naturalWidth / dw;
+  const nx = x*scaleFactor, ny = y*scaleFactor, nw = w*scaleFactor, nh = h*scaleFactor;
+  const targetLong = 1600; // enlarge so the cropped receipt stays readable
+  const outScale = Math.max(1, targetLong / Math.max(nw, nh));
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = Math.round(nw*outScale);
+  outCanvas.height = Math.round(nh*outScale);
+  const ctx = outCanvas.getContext('2d');
+  ctx.drawImage(img, nx, ny, nw, nh, 0, 0, outCanvas.width, outCanvas.height);
+  outCanvas.toBlob((blob) => {
+    const newFile = new File([blob], file.name.replace(/\.\w+$/, '') + '_crop.jpg', {type:'image/jpeg'});
+    if(cropResolve) cropResolve(newFile);
+  }, 'image/jpeg', 0.92);
+}
+
+setupCropHandlers();
+initReportPeriod();
+renderPanels();
+</script>
+
+</body>
+</html>
