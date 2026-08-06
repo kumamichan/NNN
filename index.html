@@ -657,6 +657,7 @@
         <select id="reportMonth" onchange="renderPanels(); switchTab(activeTab);"></select>
       </div>
       <button class="btn-main btn-secondary send-now-btn" onclick="sendMonthNow()">この年月の分を今すぐ税理士へ送る</button>
+      <button class="btn-main btn-secondary send-now-btn" onclick="showHistory()">この月の保存済みデータを確認する</button>
       <div class="status-line" id="sendNowStatus"></div>
     </div>
 
@@ -669,14 +670,20 @@
 
   </div>
 
+  <div id="historyView" class="settings-view">
+    <h2 class="settings-title">保存済みデータの確認</h2>
+    <div id="historyContent"><p class="status-line">読み込み中...</p></div>
+    <button class="btn-main" onclick="hideHistory()">アプリ画面に戻る</button>
+  </div>
+
   <div id="settingsView" class="settings-view">
     <h2 class="settings-title">設定</h2>
 
     <div class="accountant-card">
       <label>クラウド連携（GASのウェブアプリURL）</label>
-      <p class="danger-hint">この1つのURLで、PDFのドライブ保存・スプレッドシートへの記録・自動/即時メール送信のすべてが動きます。</p>
+      <p class="danger-hint">この1つのURLで、PDFのドライブ保存・スプレッドシートへの記録・自動/即時メール送信・保存済みデータの確認のすべてが動きます。</p>
       <div class="accountant-row">
-        <input type="text" id="gasUrl" placeholder="例）https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbyCB3xEdTR96mB_2EoibVTbch-ngMUBlkZYWVHGy3svfajb1lpzQO9YN7zlcGNsfXxS/exec">
+        <input type="text" id="gasUrl" placeholder="例）https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbyx8mRDOyqQw0IQcJAYEuCBWX8voksb6ND4qooJAREaGrdEocpqMhihsV43KkUarVdf/exec">
       </div>
     </div>
 
@@ -926,6 +933,72 @@ function resetAllData(triggeredBi){
     statusEl.className = 'status-line ok';
     statusEl.textContent = 'アップロード内容をすべてリセットしました。';
   }
+}
+
+function fetchMonthHistory(year, month){
+  return new Promise((resolve, reject) => {
+    const url = document.getElementById('gasUrl').value.trim();
+    if(!url){ reject(new Error('URL未設定')); return; }
+    const cbName = 'gasHistoryCallback_' + Date.now();
+    const script = document.createElement('script');
+    const cleanup = () => {
+      delete window[cbName];
+      script.remove();
+    };
+    window[cbName] = (data) => { resolve(data); cleanup(); };
+    script.onerror = () => { reject(new Error('読み込みに失敗しました')); cleanup(); };
+    const sep = url.includes('?') ? '&' : '?';
+    script.src = url + sep + 'year=' + encodeURIComponent(year) + '&month=' + encodeURIComponent(month) + '&callback=' + cbName;
+    document.body.appendChild(script);
+  });
+}
+
+function renderHistoryHTML(data, year, month){
+  const label = `${year}年${month}月`;
+  if(!data || (!data.businesses || data.businesses.length === 0) && (!data.rows || data.rows.length === 0)){
+    return `<p class="status-line">${label}分として、まだクラウドに保存されたデータはありません。</p>`;
+  }
+  let html = `<p class="danger-hint">${label}分として、現在クラウド上に保存されている内容です。</p>`;
+
+  (data.businesses || []).forEach(biz => {
+    html += `<div class="accountant-card"><label>${biz.name}（PDF ${biz.files.length}件）</label><ul class="file-list">`;
+    biz.files.forEach(f => {
+      html += `<li><div class="file-row-top"><span class="thumb thumb-pdf">PDF</span><span class="fname">${f.name}</span><span class="fsize">${fmtSize(f.size)}</span></div></li>`;
+    });
+    html += `</ul></div>`;
+  });
+
+  if(data.rows && data.rows.length > 0){
+    const total = data.rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+    html += `<div class="summary-card"><h4>スプレッドシート記録（合計 ¥${Math.round(total).toLocaleString()}）</h4>`;
+    data.rows.forEach(r => {
+      html += `<div class="summary-row"><span>${r.business} / ${r.expenseType}</span><span>¥${Math.round(parseFloat(r.amount)||0).toLocaleString()}</span></div>`;
+    });
+    html += `</div>`;
+  }
+  return html;
+}
+
+async function showHistory(){
+  document.getElementById('mainView').style.display = 'none';
+  document.getElementById('historyView').style.display = 'block';
+  const content = document.getElementById('historyContent');
+  content.innerHTML = '<p class="status-line">読み込み中...</p>';
+
+  const year = document.getElementById('reportYear').value;
+  const month = document.getElementById('reportMonth').value;
+
+  try{
+    const data = await fetchMonthHistory(year, month);
+    content.innerHTML = renderHistoryHTML(data, year, month);
+  } catch(e){
+    content.innerHTML = '<p class="status-line error">読み込みに失敗しました。設定画面のGAS URLをご確認ください。</p>';
+  }
+}
+
+function hideHistory(){
+  document.getElementById('historyView').style.display = 'none';
+  document.getElementById('mainView').style.display = 'block';
 }
 
 function showSettings(){
