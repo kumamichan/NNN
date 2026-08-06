@@ -683,7 +683,7 @@
       <label>クラウド連携（GASのウェブアプリURL）</label>
       <p class="danger-hint">この1つのURLで、PDFのドライブ保存・スプレッドシートへの記録・自動/即時メール送信・保存済みデータの確認のすべてが動きます。</p>
       <div class="accountant-row">
-        <input type="text" id="gasUrl" placeholder="例）https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbyx8mRDOyqQw0IQcJAYEuCBWX8voksb6ND4qooJAREaGrdEocpqMhihsV43KkUarVdf/exec">
+        <input type="text" id="gasUrl" placeholder="例）https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbzsMZWM9_IW9f481h1RVoalmLmhq4VOH3mQLQJePwQ-nH7eBGEQPpqzo4xTAR2fevS8/exec">
       </div>
     </div>
 
@@ -953,30 +953,68 @@ function fetchMonthHistory(year, month){
   });
 }
 
-function renderHistoryHTML(data, year, month){
-  const label = `${year}年${month}月`;
-  if(!data || (!data.businesses || data.businesses.length === 0) && (!data.rows || data.rows.length === 0)){
-    return `<p class="status-line">${label}分として、まだクラウドに保存されたデータはありません。</p>`;
-  }
-  let html = `<p class="danger-hint">${label}分として、現在クラウド上に保存されている内容です。</p>`;
+let historyData = null;
+let historyActiveTab = 0;
 
-  (data.businesses || []).forEach(biz => {
-    html += `<div class="accountant-card"><label>${biz.name}（PDF ${biz.files.length}件）</label><ul class="file-list">`;
-    biz.files.forEach(f => {
-      html += `<li><div class="file-row-top"><span class="thumb thumb-pdf">PDF</span><span class="fname">${f.name}</span><span class="fsize">${fmtSize(f.size)}</span></div></li>`;
-    });
-    html += `</ul></div>`;
-  });
+function getHistoryBusinessNames(data){
+  const names = [];
+  (data.businesses || []).forEach(b => { if(!names.includes(b.name)) names.push(b.name); });
+  (data.rows || []).forEach(r => { if(!names.includes(r.business)) names.push(r.business); });
+  return names;
+}
 
-  if(data.rows && data.rows.length > 0){
-    const total = data.rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
-    html += `<div class="summary-card"><h4>スプレッドシート記録（合計 ¥${Math.round(total).toLocaleString()}）</h4>`;
-    data.rows.forEach(r => {
-      html += `<div class="summary-row"><span>${r.business} / ${r.expenseType}</span><span>¥${Math.round(parseFloat(r.amount)||0).toLocaleString()}</span></div>`;
-    });
-    html += `</div>`;
+function renderHistoryView(){
+  const content = document.getElementById('historyContent');
+  const data = historyData;
+  const label = `${data._year}年${data._month}月`;
+  const names = getHistoryBusinessNames(data);
+
+  if(names.length === 0){
+    content.innerHTML = `<p class="status-line">${label}分として、まだクラウドに保存されたデータはありません。</p>`;
+    return;
   }
-  return html;
+
+  if(historyActiveTab >= names.length) historyActiveTab = 0;
+  const activeName = names[historyActiveTab];
+  const bizEntry = (data.businesses || []).find(b => b.name === activeName);
+  const rows = (data.rows || []).filter(r => r.business === activeName);
+  const total = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+
+  let html = `<p class="danger-hint">${label}分の保存状況です。事業ごとにタブで切り替えて確認できます。</p>`;
+
+  html += `<div class="tabs">${names.map((n, i) => `<button class="tab-btn ${i===historyActiveTab?'active':''}" onclick="switchHistoryTab(${i})">${n}</button>`).join('')}</div>`;
+
+  html += `<div class="accountant-card"><label>保存済みPDF（${bizEntry ? bizEntry.files.length : 0}件）</label>`;
+  if(bizEntry && bizEntry.files.length > 0){
+    html += `<ul class="file-list">`;
+    bizEntry.files.forEach(f => {
+      const thumbHtml = f.thumbnailUrl
+        ? `<img class="thumb" src="${f.thumbnailUrl}" loading="lazy" alt="" onerror="this.outerHTML='<span class=&quot;thumb thumb-pdf&quot;>PDF</span>'">`
+        : `<span class="thumb thumb-pdf">PDF</span>`;
+      html += `<li><div class="file-row-top">${thumbHtml}<span class="fname">${f.name}</span><span class="fsize">${fmtSize(f.size)}</span></div></li>`;
+    });
+    html += `</ul>`;
+  } else {
+    html += `<p class="status-line">この事業のPDFはまだありません。</p>`;
+  }
+  html += `</div>`;
+
+  html += `<div class="summary-card"><h4>${activeName} 合計 ¥${Math.round(total).toLocaleString()}</h4>`;
+  if(rows.length > 0){
+    rows.forEach(r => {
+      html += `<div class="summary-row"><span>${r.category} / ${r.expenseType}</span><span>¥${Math.round(parseFloat(r.amount)||0).toLocaleString()}</span></div>`;
+    });
+  } else {
+    html += `<div class="summary-row muted">まだ金額の記録がありません</div>`;
+  }
+  html += `</div>`;
+
+  content.innerHTML = html;
+}
+
+function switchHistoryTab(i){
+  historyActiveTab = i;
+  renderHistoryView();
 }
 
 async function showHistory(){
@@ -990,7 +1028,11 @@ async function showHistory(){
 
   try{
     const data = await fetchMonthHistory(year, month);
-    content.innerHTML = renderHistoryHTML(data, year, month);
+    data._year = year;
+    data._month = month;
+    historyData = data;
+    historyActiveTab = 0;
+    renderHistoryView();
   } catch(e){
     content.innerHTML = '<p class="status-line error">読み込みに失敗しました。設定画面のGAS URLをご確認ください。</p>';
   }
@@ -1032,7 +1074,7 @@ function renderPanels(){
 
       <div class="bottom-actions">
         <p>レシートが増えるたびに「クラウドに保存」しておけば、PDFがドライブに、金額はスプレッドシートに記録され、毎月15日に自動でまとめて税理士事務所へ送信されます。今すぐ送りたい時は下の共有ボタンからその場でメール添付できます。</p>
-        <button class="btn-main" onclick="saveToCloud(${bi})">クラウドに保存する</button>
+        <button class="btn-main" id="cloudBtn${bi}" onclick="saveToCloud(${bi})">クラウドに保存する</button>
         <button class="btn-main btn-secondary" onclick="generateAndShare(${bi})">まとめてPDF化して今すぐ共有する</button>
         <button class="btn-main btn-danger" onclick="resetAllData(${bi})">写真・PDFの内容をすべてリセットする</button>
         <button class="link-btn" onclick="showShareDemo()">共有すると何が起きるか、サンプルで見る</button>
@@ -1223,7 +1265,8 @@ function collectExpenseRows(bi, year, month){
         category: cat.label,
         expenseType: f._expenseType || 'その他',
         amount: amt,
-        fileName: f.name
+        fileName: f.name,
+        contentHash: f._contentHash || ''
       });
     });
   });
@@ -1232,6 +1275,9 @@ function collectExpenseRows(bi, year, month){
 
 async function saveToCloud(bi){
   const statusEl = document.getElementById('status'+bi);
+  const btn = document.getElementById('cloudBtn'+bi);
+  if(btn && btn.disabled) return; // already saving — ignore rapid repeat taps
+
   const url = document.getElementById('gasUrl').value.trim();
   if(!url){
     statusEl.className = 'status-line error';
@@ -1245,6 +1291,11 @@ async function saveToCloud(bi){
 
   statusEl.className = 'status-line';
   statusEl.textContent = 'クラウドにPDFを保存しています...';
+
+  if(btn){
+    btn.disabled = true;
+    btn.textContent = '保存中...';
+  }
 
   let uploaded = 0;
   try{
@@ -1285,9 +1336,11 @@ async function saveToCloud(bi){
   } catch(e){
     statusEl.className = 'status-line error';
     statusEl.textContent = '保存に失敗しました。通信環境やURLをご確認ください。';
+    if(btn){ btn.disabled = false; btn.textContent = 'クラウドに保存する'; }
     return;
   }
 
+  if(btn){ btn.disabled = false; btn.textContent = 'クラウドに保存する'; }
   renderPanels();
   switchTab(activeTab);
 
@@ -1308,6 +1361,16 @@ function renameBusiness(bi, val){
   document.getElementById('tabBtn'+bi).textContent = short;
 }
 
+async function computeFileHash(file){
+  try{
+    const buf = await file.arrayBuffer();
+    const digest = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2,'0')).join('');
+  } catch(e){
+    return null; // hashing unsupported/failed — falls back gracefully (row just won't have a hash)
+  }
+}
+
 async function addFiles(bi, catId, fileList){
   const arr = businesses[bi].files[catId];
   const filesArr = Array.from(fileList);
@@ -1322,6 +1385,9 @@ async function addFiles(bi, catId, fileList){
     finalFile._selected = false;
     // create a thumbnail URL once and cache it on the file object (cheap: no data copy, browser just references the blob)
     finalFile._thumbUrl = (finalFile.type && finalFile.type.startsWith('image/')) ? URL.createObjectURL(finalFile) : null;
+    // fingerprint of the actual image content — used server-side to detect true duplicates (same photo saved twice),
+    // not just matching amount/category, so legitimate repeated amounts (e.g. parking receipts) are never wrongly merged
+    finalFile._contentHash = await computeFileHash(finalFile);
     arr.push(finalFile);
 
     if(catId !== 'passbook' && finalFile.type && finalFile.type.startsWith('image/') && typeof Tesseract !== 'undefined'){
