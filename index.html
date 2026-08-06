@@ -86,6 +86,9 @@
     color:var(--navy);
     margin-bottom:6px;
   }
+  .accountant-card label.label-spaced{
+    margin-top:14px;
+  }
   .accountant-row{display:flex;gap:8px;}
   .accountant-row input,
   .accountant-row select{
@@ -683,8 +686,22 @@
       <label>クラウド連携（GASのウェブアプリURL）</label>
       <p class="danger-hint">この1つのURLで、PDFのドライブ保存・スプレッドシートへの記録・自動/即時メール送信・保存済みデータの確認のすべてが動きます。</p>
       <div class="accountant-row">
-        <input type="text" id="gasUrl" placeholder="例）https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbzsMZWM9_IW9f481h1RVoalmLmhq4VOH3mQLQJePwQ-nH7eBGEQPpqzo4xTAR2fevS8/exec">
+        <input type="text" id="gasUrl" placeholder="例）https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbw6SnLXb2Onc5HMa3oHsLG3ANZWcbHNDGRwQeGgX7AJncHDwxtgtMUguP8oVwG0PsHG/exec">
       </div>
+    </div>
+
+    <div class="accountant-card">
+      <label>税理士事務所のメールアドレス（自動送信・今すぐ送るの宛先）</label>
+      <div class="accountant-row">
+        <input type="text" id="accountantEmailSetting" placeholder="例）tax-office@example.com" value="info-tomakomai@taishinkouken.co.jp">
+      </div>
+      <label class="label-spaced">自分にも同じ内容を送るアドレス（BCC・空欄でも可）</label>
+      <div class="accountant-row">
+        <input type="text" id="bccEmailSetting" placeholder="例）you@gmail.com" value="kumami0513@gmail.com">
+      </div>
+      <button class="btn-main" onclick="saveEmailSettings()">この内容を保存する</button>
+      <div class="status-line" id="emailSettingStatus"></div>
+      <p class="danger-hint">薬局・事業所ごとに税理士が変わる場合は、ここを書き換えて「保存する」を押すだけで、GAS側のコードを触らずに送信先を変更できます。</p>
     </div>
 
     <button class="btn-main" onclick="hideSettings()">アプリ画面に戻る</button>
@@ -1043,6 +1060,39 @@ function hideHistory(){
   document.getElementById('mainView').style.display = 'block';
 }
 
+async function saveEmailSettings(){
+  const statusEl = document.getElementById('emailSettingStatus');
+  const url = document.getElementById('gasUrl').value.trim();
+  if(!url){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = 'クラウド連携のGAS URLを先に入力してください。';
+    return;
+  }
+  const accountantEmail = document.getElementById('accountantEmailSetting').value.trim();
+  const bccEmail = document.getElementById('bccEmailSetting').value.trim();
+  if(!accountantEmail){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = '税理士事務所のメールアドレスを入力してください。';
+    return;
+  }
+
+  statusEl.className = 'status-line';
+  statusEl.textContent = '保存しています...';
+  try{
+    await fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify({ action: 'setEmails', accountantEmail, bccEmail })
+    });
+    statusEl.className = 'status-line ok';
+    statusEl.textContent = '保存しました。次回の送信からこの宛先が使われます。';
+  } catch(e){
+    statusEl.className = 'status-line error';
+    statusEl.textContent = '保存に失敗しました。通信環境をご確認ください。';
+  }
+}
+
 function showSettings(){
   document.getElementById('mainView').style.display = 'none';
   document.getElementById('settingsView').style.display = 'block';
@@ -1300,14 +1350,14 @@ async function saveToCloud(bi){
   let uploaded = 0;
   try{
     for(const cat of CATEGORIES){
-      if(businesses[bi].files[cat.id].length === 0) continue;
-      let pdfData = businesses[bi].pdfs[cat.id];
-      if(!pdfData){
-        pdfData = await buildPdfForCategory(bi, cat.id);
-        businesses[bi].pdfs[cat.id] = pdfData;
-      }
+      // 「まだクラウドに送っていない写真」だけを対象にPDF化してアップロードする。
+      // 毎回全部まとめ直すと、送るたびに内容が膨らんだPDFが積み重なってしまうため。
+      const pending = businesses[bi].files[cat.id].filter(f => !f._cloudUploaded);
+      if(pending.length === 0) continue;
+      const pdfData = await buildPdfFromFiles(pending);
+      if(!pdfData) continue;
       const base64 = arrayBufferToBase64(pdfData.bytes);
-      const fname = pdfFileName(bi, cat.label);
+      const fname = pdfFileName(bi, cat.label, true);
       await fetch(url, {
         method: 'POST',
         mode: 'no-cors',
@@ -1320,10 +1370,12 @@ async function saveToCloud(bi){
           base64
         })
       });
+      pending.forEach(f => { f._cloudUploaded = true; });
       uploaded++;
     }
 
     // also record this business's entered amounts as expense rows in the spreadsheet
+    // (safe to resend every time — the GAS side skips rows whose image hash was already recorded)
     const rows = collectExpenseRows(bi, year, month);
     if(rows.length > 0){
       await fetch(url, {
@@ -1344,14 +1396,14 @@ async function saveToCloud(bi){
   renderPanels();
   switchTab(activeTab);
 
-  if(uploaded === 0){
-    document.getElementById('status'+bi).className = 'status-line error';
-    document.getElementById('status'+bi).textContent = '保存できるファイルがありません。';
+  const rowCount = collectExpenseRows(bi, year, month).length;
+  if(uploaded === 0 && rowCount === 0){
+    document.getElementById('status'+bi).className = 'status-line';
+    document.getElementById('status'+bi).textContent = '新しく保存する内容がありません（すでに最新の状態です）。';
     return;
   }
-  const rowCount = collectExpenseRows(bi, year, month).length;
   document.getElementById('status'+bi).className = 'status-line ok';
-  document.getElementById('status'+bi).textContent = `${uploaded}件のPDFをクラウドに保存し、${rowCount}件の金額をスプレッドシートに記録しました（15日に自動送信されます）。`;
+  document.getElementById('status'+bi).textContent = `新しく${uploaded}件のPDFをクラウドに保存しました（金額の記録も送信済みです。15日に自動送信されます）。`;
 }
 
 function renameBusiness(bi, val){
@@ -1409,9 +1461,8 @@ function removeFile(bi, catId, fi){
   switchTab(activeTab);
 }
 
-async function buildPdfForCategory(bi, catId){
-  const files = businesses[bi].files[catId];
-  if(files.length === 0) return null;
+async function buildPdfFromFiles(files){
+  if(!files || files.length === 0) return null;
 
   const { PDFDocument } = PDFLib;
   const pdfDoc = await PDFDocument.create();
@@ -1445,12 +1496,18 @@ async function buildPdfForCategory(bi, catId){
   return {bytes: pdfBytes, pageCount: pdfDoc.getPageCount()};
 }
 
-function pdfFileName(bi, catLabel){
+async function buildPdfForCategory(bi, catId){
+  const files = businesses[bi].files[catId];
+  return buildPdfFromFiles(files);
+}
+
+function pdfFileName(bi, catLabel, unique){
   const fallback = bi===0 ? '法人' : '個人';
   const bizName = (businesses[bi].name || fallback).trim() || fallback;
   const ym = document.getElementById('reportYear').value + document.getElementById('reportMonth').value.padStart(2,'0');
   const safeBiz = bizName.replace(/[\\/:*?"<>|]/g, '_');
-  return `${safeBiz}_${catLabel}_${ym}.pdf`;
+  const suffix = unique ? ('_' + Date.now()) : '';
+  return `${safeBiz}_${catLabel}_${ym}${suffix}.pdf`;
 }
 
 async function generateAndShare(bi){
