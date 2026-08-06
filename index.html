@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>税理士提出書類まとめアプリ</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
 <style>
   :root{
@@ -464,6 +463,9 @@
     background:var(--danger);
     margin-top:10px;
   }
+  .btn-sheet{
+    background:#0f9d58;
+  }
 
   .crop-modal{
     position:fixed;
@@ -653,20 +655,21 @@
 
   <div id="mainView">
 
+    <div class="tabs">
+      <button class="tab-btn active" id="tabBtn0" onclick="switchTab(0)">法人</button>
+      <button class="tab-btn" id="tabBtn1" onclick="switchTab(1)">個人</button>
+    </div>
+
     <div class="accountant-card">
       <label>対象年月（月次報告用・PDFファイル名に使われます）</label>
       <div class="accountant-row">
         <select id="reportYear" onchange="renderPanels(); switchTab(activeTab);"></select>
         <select id="reportMonth" onchange="renderPanels(); switchTab(activeTab);"></select>
       </div>
-      <button class="btn-main btn-secondary send-now-btn" onclick="sendMonthNow()">この年月の分を今すぐ税理士へ送る</button>
       <button class="btn-main btn-secondary send-now-btn" onclick="showHistory()">この月の保存済みデータを確認する</button>
+      <button class="btn-main btn-sheet send-now-btn" onclick="openSpreadsheet(0)">スプレッドシートを開く（法人用）</button>
+      <button class="btn-main btn-sheet send-now-btn" onclick="openSpreadsheet(1)">スプレッドシートを開く（個人用）</button>
       <div class="status-line" id="sendNowStatus"></div>
-    </div>
-
-    <div class="tabs">
-      <button class="tab-btn active" id="tabBtn0" onclick="switchTab(0)">法人</button>
-      <button class="tab-btn" id="tabBtn1" onclick="switchTab(1)">個人</button>
     </div>
 
     <div id="panels"></div>
@@ -684,24 +687,10 @@
 
     <div class="accountant-card">
       <label>クラウド連携（GASのウェブアプリURL）</label>
-      <p class="danger-hint">この1つのURLで、PDFのドライブ保存・スプレッドシートへの記録・自動/即時メール送信・保存済みデータの確認のすべてが動きます。</p>
+      <p class="danger-hint">この1つのURLで、PDFのドライブ保存・スプレッドシートへの記録・保存済みデータの確認のすべてが動きます。</p>
       <div class="accountant-row">
-        <input type="text" id="gasUrl" placeholder="例）https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbw6SnLXb2Onc5HMa3oHsLG3ANZWcbHNDGRwQeGgX7AJncHDwxtgtMUguP8oVwG0PsHG/exec">
+        <input type="text" id="gasUrl" placeholder="例）https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbwAjDrssiVkZPhcXCAxPIPt9-MSbdoxHSRaanLrrspEZHOmj0hS4If04PZ_VVXTcAUK/exec">
       </div>
-    </div>
-
-    <div class="accountant-card">
-      <label>税理士事務所のメールアドレス（自動送信・今すぐ送るの宛先）</label>
-      <div class="accountant-row">
-        <input type="text" id="accountantEmailSetting" placeholder="例）tax-office@example.com" value="info-tomakomai@taishinkouken.co.jp">
-      </div>
-      <label class="label-spaced">自分にも同じ内容を送るアドレス（BCC・空欄でも可）</label>
-      <div class="accountant-row">
-        <input type="text" id="bccEmailSetting" placeholder="例）you@gmail.com" value="kumami0513@gmail.com">
-      </div>
-      <button class="btn-main" onclick="saveEmailSettings()">この内容を保存する</button>
-      <div class="status-line" id="emailSettingStatus"></div>
-      <p class="danger-hint">薬局・事業所ごとに税理士が変わる場合は、ここを書き換えて「保存する」を押すだけで、GAS側のコードを触らずに送信先を変更できます。</p>
     </div>
 
     <button class="btn-main" onclick="hideSettings()">アプリ画面に戻る</button>
@@ -729,58 +718,6 @@
     <div class="crop-actions">
       <button class="btn-small" onclick="skipCrop()">切り抜かずそのまま使う</button>
       <button class="btn-main" onclick="confirmCrop()">この範囲を拡大して保存</button>
-    </div>
-  </div>
-</div>
-
-<div class="crop-modal" id="shareDemoModal">
-  <div class="crop-modal-inner share-demo-inner">
-    <h3 class="demo-title">「まとめてPDF化して共有する」を押すと…</h3>
-
-    <div class="demo-step">
-      <span class="demo-step-num">1</span>
-      <div>
-        <b>4種類のPDFが自動で作られます</b>
-        <div class="demo-files">
-          <div class="demo-file"><span class="demo-file-icon">PDF</span>法人_通帳コピー_202607.pdf</div>
-          <div class="demo-file"><span class="demo-file-icon">PDF</span>法人_請求書_202607.pdf</div>
-          <div class="demo-file"><span class="demo-file-icon">PDF</span>法人_領収書_202607.pdf</div>
-          <div class="demo-file"><span class="demo-file-icon">PDF</span>法人_クレジットカード利用明細_202607.pdf</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="demo-step">
-      <span class="demo-step-num">2</span>
-      <div>
-        <b>iPhoneの共有シートが開きます</b>
-        <div class="demo-sheet">
-          <div class="demo-sheet-files">4個のPDFファイル</div>
-          <div class="demo-app-row">
-            <div class="demo-app"><div class="demo-app-icon">💬</div>Message</div>
-            <div class="demo-app"><div class="demo-app-icon">📱</div>LINE</div>
-            <div class="demo-app selected"><div class="demo-app-icon">✉️</div>メール</div>
-            <div class="demo-app"><div class="demo-app-icon">📝</div>メモ</div>
-            <div class="demo-app"><div class="demo-app-icon">•••</div>その他</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="demo-step">
-      <span class="demo-step-num">3</span>
-      <div><b>「メール」を選ぶと、4つのPDFが添付された状態でメール作成画面が開きます</b></div>
-    </div>
-
-    <div class="demo-step">
-      <span class="demo-step-num">4</span>
-      <div><b>宛先に税理士事務所のメールアドレスを入力して送信すれば完了です</b>（設定画面でコピーしたアドレスを貼り付けてください）</div>
-    </div>
-
-    <p class="demo-footnote">※これはイメージ図です。実際の画面はiPhoneの機種やOSのバージョンによって多少見た目が異なります。</p>
-
-    <div class="crop-actions">
-      <button class="btn-main" onclick="hideShareDemo()">閉じる</button>
     </div>
   </div>
 </div>
@@ -920,14 +857,6 @@ function switchTab(i){
   document.getElementById('panel1').classList.toggle('active', i===1);
 }
 
-function showShareDemo(){
-  document.getElementById('shareDemoModal').classList.add('active');
-}
-
-function hideShareDemo(){
-  document.getElementById('shareDemoModal').classList.remove('active');
-}
-
 function resetAllData(triggeredBi){
   const ok = confirm('法人・個人どちらのタブも、現在アップロード中の写真・PDF・金額入力をすべて消去します。よろしいですか？（クラウドやスプレッドシートに保存済みのデータは消えません）');
   if(!ok) return;
@@ -1034,6 +963,16 @@ function switchHistoryTab(i){
   renderHistoryView();
 }
 
+const SPREADSHEET_URLS = {
+  0: 'https://docs.google.com/spreadsheets/d/1XsASAGemCy0cTxVDNdhYCRgkvDfLZWjkOc52xziFfqM/edit', // 法人用
+  1: 'https://docs.google.com/spreadsheets/d/1KkIqFXZ1k6UjqocMgHiEJUfuj1SjiZTC94qT_BRkDYA/edit'  // 個人用
+};
+
+function openSpreadsheet(bi){
+  const url = SPREADSHEET_URLS[bi] || SPREADSHEET_URLS[0];
+  window.open(url, '_blank');
+}
+
 async function showHistory(){
   document.getElementById('mainView').style.display = 'none';
   document.getElementById('historyView').style.display = 'block';
@@ -1058,39 +997,6 @@ async function showHistory(){
 function hideHistory(){
   document.getElementById('historyView').style.display = 'none';
   document.getElementById('mainView').style.display = 'block';
-}
-
-async function saveEmailSettings(){
-  const statusEl = document.getElementById('emailSettingStatus');
-  const url = document.getElementById('gasUrl').value.trim();
-  if(!url){
-    statusEl.className = 'status-line error';
-    statusEl.textContent = 'クラウド連携のGAS URLを先に入力してください。';
-    return;
-  }
-  const accountantEmail = document.getElementById('accountantEmailSetting').value.trim();
-  const bccEmail = document.getElementById('bccEmailSetting').value.trim();
-  if(!accountantEmail){
-    statusEl.className = 'status-line error';
-    statusEl.textContent = '税理士事務所のメールアドレスを入力してください。';
-    return;
-  }
-
-  statusEl.className = 'status-line';
-  statusEl.textContent = '保存しています...';
-  try{
-    await fetch(url, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {'Content-Type': 'text/plain'},
-      body: JSON.stringify({ action: 'setEmails', accountantEmail, bccEmail })
-    });
-    statusEl.className = 'status-line ok';
-    statusEl.textContent = '保存しました。次回の送信からこの宛先が使われます。';
-  } catch(e){
-    statusEl.className = 'status-line error';
-    statusEl.textContent = '保存に失敗しました。通信環境をご確認ください。';
-  }
 }
 
 function showSettings(){
@@ -1123,11 +1029,9 @@ function renderPanels(){
       ${CATEGORIES.map(cat => renderCategory(bi, cat)).join('')}
 
       <div class="bottom-actions">
-        <p>レシートが増えるたびに「クラウドに保存」しておけば、PDFがドライブに、金額はスプレッドシートに記録され、毎月15日に自動でまとめて税理士事務所へ送信されます。今すぐ送りたい時は下の共有ボタンからその場でメール添付できます。</p>
+        <p>レシートが増えるたびに「クラウドに保存」しておけば、PDFはドライブに、金額・画像はスプレッドシートに自動で記録されます。税理士には共有したスプレッドシートをそのまま見てもらえます。</p>
         <button class="btn-main" id="cloudBtn${bi}" onclick="saveToCloud(${bi})">クラウドに保存する</button>
-        <button class="btn-main btn-secondary" onclick="generateAndShare(${bi})">まとめてPDF化して今すぐ共有する</button>
         <button class="btn-main btn-danger" onclick="resetAllData(${bi})">写真・PDFの内容をすべてリセットする</button>
-        <button class="link-btn" onclick="showShareDemo()">共有すると何が起きるか、サンプルで見る</button>
         <div class="status-line" id="status${bi}"></div>
         <div class="individual-links" id="links${bi}"></div>
       </div>
@@ -1259,39 +1163,6 @@ function updateType(bi, catId, fi, val){
   updateSummary(bi);
 }
 
-async function sendMonthNow(){
-  const statusEl = document.getElementById('sendNowStatus');
-  const url = document.getElementById('gasUrl').value.trim();
-  if(!url){
-    statusEl.className = 'status-line error';
-    statusEl.textContent = '設定画面でGASのウェブアプリURLを入力してください。';
-    return;
-  }
-  const year = document.getElementById('reportYear').value;
-  const month = document.getElementById('reportMonth').value;
-  const monthLabel = year + '年' + month + '月';
-
-  const ok = confirm(monthLabel + '分として、クラウドに保存済みのPDFを今すぐ税理士事務所へメール送信します。よろしいですか？');
-  if(!ok) return;
-
-  statusEl.className = 'status-line';
-  statusEl.textContent = '送信をリクエストしています...';
-
-  try{
-    await fetch(url, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {'Content-Type': 'text/plain'},
-      body: JSON.stringify({ action: 'sendNow', year, month })
-    });
-    statusEl.className = 'status-line ok';
-    statusEl.textContent = monthLabel + '分の送信をリクエストしました。数分後、税理士事務所に届いているかご確認ください。';
-  } catch(e){
-    statusEl.className = 'status-line error';
-    statusEl.textContent = '送信リクエストに失敗しました。通信環境やURLをご確認ください。';
-  }
-}
-
 function arrayBufferToBase64(bytes){
   let binary = '';
   const chunkSize = 0x8000;
@@ -1348,42 +1219,69 @@ async function saveToCloud(bi){
   }
 
   let uploaded = 0;
+  let recorded = 0;
   try{
     for(const cat of CATEGORIES){
       // 「まだクラウドに送っていない写真」だけを対象にPDF化してアップロードする。
       // 毎回全部まとめ直すと、送るたびに内容が膨らんだPDFが積み重なってしまうため。
       const pending = businesses[bi].files[cat.id].filter(f => !f._cloudUploaded);
       if(pending.length === 0) continue;
-      const pdfData = await buildPdfFromFiles(pending);
-      if(!pdfData) continue;
-      const base64 = arrayBufferToBase64(pdfData.bytes);
-      const fname = pdfFileName(bi, cat.label, true);
-      await fetch(url, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {'Content-Type': 'text/plain'},
-        body: JSON.stringify({
-          action: 'uploadPdf',
-          business: bizName,
-          year, month,
-          fileName: fname,
-          base64
-        })
-      });
-      pending.forEach(f => { f._cloudUploaded = true; });
-      uploaded++;
-    }
 
-    // also record this business's entered amounts as expense rows in the spreadsheet
-    // (safe to resend every time — the GAS side skips rows whose image hash was already recorded)
-    const rows = collectExpenseRows(bi, year, month);
-    if(rows.length > 0){
-      await fetch(url, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {'Content-Type': 'text/plain'},
-        body: JSON.stringify({ rows })
-      });
+      // 1) メール添付用の一覧PDFを作成してアップロード（今まで通り）
+      const entries = buildLabeledEntries(bi, cat.id, pending);
+      const pdfData = await buildPdfFromFiles(entries);
+      if(pdfData){
+        const base64 = arrayBufferToBase64(pdfData.bytes);
+        const fname = pdfFileName(bi, cat.label, true);
+        await fetch(url, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {'Content-Type': 'text/plain'},
+          body: JSON.stringify({
+            action: 'uploadPdf',
+            business: bizName,
+            year, month,
+            fileName: fname,
+            base64
+          })
+        });
+        uploaded++;
+      }
+
+      // 2) レシート1件ずつ、画像付きでスプレッドシート（税理士用一覧）に記録
+      if(cat.id !== 'passbook'){
+        for(const f of pending){
+          const amt = parseFloat(f._amount) || 0;
+          if(amt === 0) continue;
+
+          const payload = {
+            action: 'recordExpense',
+            year, month,
+            business: bizName,
+            bizSlot: bi,
+            category: cat.label,
+            expenseType: f._expenseType || 'その他',
+            amount: amt,
+            fileName: f.name,
+            contentHash: f._contentHash || ''
+          };
+          if(f.type && f.type.startsWith('image/')){
+            const imgBytes = new Uint8Array(await f.arrayBuffer());
+            payload.imageBase64 = arrayBufferToBase64(imgBytes);
+            payload.imageType = f.type;
+          }
+
+          await fetch(url, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {'Content-Type': 'text/plain'},
+            body: JSON.stringify(payload)
+          });
+          recorded++;
+        }
+      }
+
+      pending.forEach(f => { f._cloudUploaded = true; });
     }
   } catch(e){
     statusEl.className = 'status-line error';
@@ -1396,14 +1294,13 @@ async function saveToCloud(bi){
   renderPanels();
   switchTab(activeTab);
 
-  const rowCount = collectExpenseRows(bi, year, month).length;
-  if(uploaded === 0 && rowCount === 0){
+  if(uploaded === 0 && recorded === 0){
     document.getElementById('status'+bi).className = 'status-line';
     document.getElementById('status'+bi).textContent = '新しく保存する内容がありません（すでに最新の状態です）。';
     return;
   }
   document.getElementById('status'+bi).className = 'status-line ok';
-  document.getElementById('status'+bi).textContent = `新しく${uploaded}件のPDFをクラウドに保存しました（金額の記録も送信済みです。15日に自動送信されます）。`;
+  document.getElementById('status'+bi).textContent = `新しく${uploaded}件のPDFと${recorded}件のレシートをクラウドに保存しました。`;
 }
 
 function renameBusiness(bi, val){
@@ -1461,44 +1358,128 @@ function removeFile(bi, catId, fi){
   switchTab(activeTab);
 }
 
-async function buildPdfFromFiles(files){
-  if(!files || files.length === 0) return null;
+async function renderLabelPng(text){
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const fontSize = 26;
+  const fontSpec = `bold ${fontSize}px "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif`;
+  ctx.font = fontSpec;
+  const paddingX = 18, paddingY = 12;
+  const textWidth = ctx.measureText(text).width;
+  canvas.width = Math.ceil(textWidth + paddingX * 2);
+  canvas.height = Math.ceil(fontSize + paddingY * 2);
+  // canvas resets its context after resizing, so re-apply font/styles
+  ctx.font = fontSpec;
+  ctx.fillStyle = '#eef1f5';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#1f3a5f';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+  ctx.fillStyle = '#1f3a5f';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, paddingX, canvas.height / 2 + 1);
+  const dataUrl = canvas.toDataURL('image/png');
+  const res = await fetch(dataUrl);
+  const buf = await res.arrayBuffer();
+  return new Uint8Array(buf);
+}
 
-  const { PDFDocument } = PDFLib;
+function buildLabeledEntries(bi, catId, files){
+  const cat = CATEGORIES.find(c => c.id === catId);
+  return files.map(f => {
+    let labelText = null;
+    if(catId !== 'passbook'){
+      const amt = (f._amount !== '' && f._amount != null) ? `¥${Number(f._amount).toLocaleString()}` : '金額未入力';
+      labelText = `カテゴリ: ${cat.label}    科目: ${f._expenseType || 'その他'}    金額: ${amt}`;
+    }
+    return { file: f, labelText };
+  });
+}
+
+async function buildPdfFromFiles(entries){
+  if(!entries || entries.length === 0) return null;
+
+  const { PDFDocument, rgb } = PDFLib;
   const pdfDoc = await PDFDocument.create();
-  const pageW = 595.28, pageH = 841.89, margin = 24;
+  const pageW = 595.28, pageH = 841.89, margin = 30;
+  const thumbSize = 80;   // bounding box for the small receipt thumbnail
+  const rowH = 96;        // vertical space reserved per row
+  const gapX = 14;
 
-  for(const file of files){
-    const bytes = await file.arrayBuffer();
-    if(file.type === 'application/pdf'){
-      const srcDoc = await PDFDocument.load(bytes, {ignoreEncryption:true});
-      const pages = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
-      pages.forEach(p => pdfDoc.addPage(p));
-    } else {
-      let img;
-      try{
-        if(file.type === 'image/png'){
-          img = await pdfDoc.embedPng(bytes);
-        } else {
-          img = await pdfDoc.embedJpg(bytes);
-        }
-      } catch(e){
-        throw new Error(`「${file.name}」の読み込みに失敗しました。HEIC形式の可能性があります。`);
-      }
-      const maxW = pageW - margin*2, maxH = pageH - margin*2;
-      const scale = Math.min(maxW/img.width, maxH/img.height, 1);
-      const w = img.width*scale, h = img.height*scale;
-      const page = pdfDoc.addPage([pageW, pageH]);
-      page.drawImage(img, {x:(pageW-w)/2, y:(pageH-h)/2, width:w, height:h});
+  let page = null;
+  let cursorY = 0;
+  const nativePdfBytesList = []; // original PDF uploads (e.g. digital invoices) — appended as full pages at the end
+
+  function ensureRoom(){
+    if(!page || cursorY - rowH < margin){
+      page = pdfDoc.addPage([pageW, pageH]);
+      cursorY = pageH - margin;
     }
   }
+
+  for(const entry of entries){
+    const file = entry.file;
+    const labelText = entry.labelText;
+    const bytes = await file.arrayBuffer();
+
+    if(file.type === 'application/pdf'){
+      nativePdfBytesList.push(bytes);
+      continue;
+    }
+
+    let img;
+    try{
+      img = (file.type === 'image/png') ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes);
+    } catch(e){
+      throw new Error(`「${file.name}」の読み込みに失敗しました。HEIC形式の可能性があります。`);
+    }
+
+    ensureRoom();
+    const rowTop = cursorY;
+
+    // small thumbnail on the left
+    const thumbScale = Math.min(thumbSize/img.width, thumbSize/img.height, 1);
+    const tw = img.width*thumbScale, th = img.height*thumbScale;
+    const thumbBoxY = rowTop - thumbSize;
+    page.drawImage(img, {x: margin + (thumbSize-tw)/2, y: thumbBoxY + (thumbSize-th)/2, width: tw, height: th});
+
+    // category / expense type / amount text to the right of the thumbnail
+    if(labelText){
+      const labelBytes = await renderLabelPng(labelText);
+      const labelImg = await pdfDoc.embedPng(labelBytes);
+      const maxLabelW = pageW - margin*2 - thumbSize - gapX;
+      const labelScale = Math.min(maxLabelW / labelImg.width, 1);
+      const lw = labelImg.width*labelScale, lh = labelImg.height*labelScale;
+      const labelY = rowTop - thumbSize/2 - lh/2;
+      page.drawImage(labelImg, {x: margin + thumbSize + gapX, y: labelY, width: lw, height: lh});
+    }
+
+    // thin separator line under the row
+    page.drawLine({
+      start: {x: margin, y: rowTop - rowH + 8},
+      end: {x: pageW - margin, y: rowTop - rowH + 8},
+      thickness: 0.5,
+      color: rgb(0.85, 0.85, 0.85)
+    });
+
+    cursorY -= rowH;
+  }
+
+  // any originally-uploaded PDF files (not photos) are appended in full afterwards
+  for(const bytes of nativePdfBytesList){
+    const srcDoc = await PDFDocument.load(bytes, {ignoreEncryption:true});
+    const pages = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+    pages.forEach(p => pdfDoc.addPage(p));
+  }
+
   const pdfBytes = await pdfDoc.save();
   return {bytes: pdfBytes, pageCount: pdfDoc.getPageCount()};
 }
 
 async function buildPdfForCategory(bi, catId){
   const files = businesses[bi].files[catId];
-  return buildPdfFromFiles(files);
+  const entries = buildLabeledEntries(bi, catId, files);
+  return buildPdfFromFiles(entries);
 }
 
 function pdfFileName(bi, catLabel, unique){
@@ -1508,82 +1489,6 @@ function pdfFileName(bi, catLabel, unique){
   const safeBiz = bizName.replace(/[\\/:*?"<>|]/g, '_');
   const suffix = unique ? ('_' + Date.now()) : '';
   return `${safeBiz}_${catLabel}_${ym}${suffix}.pdf`;
-}
-
-async function generateAndShare(bi){
-  const statusEl = document.getElementById('status'+bi);
-  const linksEl = document.getElementById('links'+bi);
-  linksEl.innerHTML = '';
-  statusEl.className = 'status-line';
-  statusEl.textContent = 'PDFを作成しています...';
-
-  const filesToShare = [];
-  try{
-    for(const cat of CATEGORIES){
-      if(businesses[bi].files[cat.id].length === 0) continue;
-      let pdfData = businesses[bi].pdfs[cat.id];
-      if(!pdfData){
-        pdfData = await buildPdfForCategory(bi, cat.id);
-        businesses[bi].pdfs[cat.id] = pdfData;
-      }
-      const fname = pdfFileName(bi, cat.label);
-      filesToShare.push(new File([pdfData.bytes], fname, {type:'application/pdf'}));
-    }
-  } catch(e){
-    statusEl.className = 'status-line error';
-    statusEl.textContent = e.message || 'PDF作成に失敗しました。';
-    return;
-  }
-
-  if(filesToShare.length === 0){
-    statusEl.className = 'status-line error';
-    statusEl.textContent = 'ファイルが1件もアップロードされていません。';
-    return;
-  }
-
-  renderPanels();
-  switchTab(activeTab);
-
-  // Try native share (best on iPhone: opens share sheet, choose Mail, attaches files)
-  if(navigator.canShare && navigator.canShare({files: filesToShare})){
-    try{
-      await navigator.share({
-        files: filesToShare,
-        title: (businesses[bi].name || '事業') + ' 提出書類',
-        text: (businesses[bi].name || '事業') + ' の提出書類一式です。'
-      });
-      document.getElementById('status'+bi).className = 'status-line ok';
-      document.getElementById('status'+bi).textContent = '共有シートを開きました。「メール」を選んで送信してください。';
-      return;
-    } catch(e){
-      // user cancelled or share failed — fall through to manual links
-    }
-  }
-
-  // Fallback: zip + individual download links
-  document.getElementById('status'+bi).className = 'status-line ok';
-  document.getElementById('status'+bi).textContent = 'この端末では共有機能が使えないため、個別にダウンロードしてください。';
-
-  const zip = new JSZip();
-  filesToShare.forEach(f => zip.file(f.name, f));
-  const zipBlob = await zip.generateAsync({type:'blob'});
-  const zipUrl = URL.createObjectURL(zipBlob);
-
-  const linksContainer = document.getElementById('links'+bi);
-  const zipLink = document.createElement('a');
-  zipLink.href = zipUrl;
-  zipLink.download = pdfFileName(bi, 'まとめて').replace('.pdf', '.zip');
-  zipLink.textContent = 'まとめてZIPをダウンロード';
-  linksContainer.appendChild(zipLink);
-
-  filesToShare.forEach(f => {
-    const url = URL.createObjectURL(f);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = f.name;
-    a.textContent = f.name + ' を個別にダウンロード';
-    linksContainer.appendChild(a);
-  });
 }
 
 function initReportPeriod(){
