@@ -689,7 +689,7 @@
       <label>クラウド連携（GASのウェブアプリURL）</label>
       <p class="danger-hint">この1つのURLで、PDFのドライブ保存・スプレッドシートへの記録・保存済みデータの確認のすべてが動きます。</p>
       <div class="accountant-row">
-        <input type="text" id="gasUrl" placeholder="例）https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbzFFblxnOFPunWNu8-q_zlSmpDLHaVAStc-6DXtX9u3NSNc3piL3yQzlaNonPBPTx5H/exec">
+        <input type="text" id="gasUrl" placeholder="例）https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbxF7XQMl2asWix_yPDzeaIdQNx9jiNhgISTc23tx3kMPOiKbfiY7lhKZt5Cwr9OWAbL/exec">
       </div>
     </div>
 
@@ -1220,6 +1220,7 @@ async function saveToCloud(bi){
 
   let uploaded = 0;
   let recorded = 0;
+  const items = [];
   try{
     for(const cat of CATEGORIES){
       // 「まだクラウドに送っていない写真」だけを対象にPDF化してアップロードする。
@@ -1248,16 +1249,12 @@ async function saveToCloud(bi){
         uploaded++;
       }
 
-      // 2) レシート1件ずつ、画像付きでスプレッドシート（税理士用一覧）に記録
+      // 2) スプレッドシート記録用のデータを集める（まだ送信はせず、後でまとめて1回で送る）
       //    通帳コピーは金額・経費科目の概念が無いので、その2つは空欄のまま画像だけ記録する
       for(const f of pending){
-        let payload;
+        let item;
         if(cat.id === 'passbook'){
-          payload = {
-            action: 'recordExpense',
-            year, month,
-            business: bizName,
-            bizSlot: bi,
+          item = {
             category: cat.label,
             expenseType: '',
             amount: '',
@@ -1267,11 +1264,7 @@ async function saveToCloud(bi){
         } else {
           const amt = parseFloat(f._amount) || 0;
           if(amt === 0) continue;
-          payload = {
-            action: 'recordExpense',
-            year, month,
-            business: bizName,
-            bizSlot: bi,
+          item = {
             category: cat.label,
             expenseType: f._expenseType || 'その他',
             amount: amt,
@@ -1282,20 +1275,31 @@ async function saveToCloud(bi){
 
         if(f.type && f.type.startsWith('image/')){
           const imgBytes = new Uint8Array(await f.arrayBuffer());
-          payload.imageBase64 = arrayBufferToBase64(imgBytes);
-          payload.imageType = f.type;
+          item.imageBase64 = arrayBufferToBase64(imgBytes);
+          item.imageType = f.type;
         }
 
-        await fetch(url, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {'Content-Type': 'text/plain'},
-          body: JSON.stringify(payload)
-        });
-        recorded++;
+        items.push(item);
       }
 
       pending.forEach(f => { f._cloudUploaded = true; });
+    }
+
+    // 3) 集めたデータをまとめて1回のリクエストでスプレッドシートに記録する
+    if(items.length > 0){
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {'Content-Type': 'text/plain'},
+        body: JSON.stringify({
+          action: 'recordExpenseBatch',
+          year, month,
+          business: bizName,
+          bizSlot: bi,
+          items
+        })
+      });
+      recorded = items.length;
     }
   } catch(e){
     statusEl.className = 'status-line error';
