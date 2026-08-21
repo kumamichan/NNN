@@ -1249,12 +1249,25 @@ async function saveToCloud(bi){
       }
 
       // 2) レシート1件ずつ、画像付きでスプレッドシート（税理士用一覧）に記録
-      if(cat.id !== 'passbook'){
-        for(const f of pending){
+      //    通帳コピーは金額・経費科目の概念が無いので、その2つは空欄のまま画像だけ記録する
+      for(const f of pending){
+        let payload;
+        if(cat.id === 'passbook'){
+          payload = {
+            action: 'recordExpense',
+            year, month,
+            business: bizName,
+            bizSlot: bi,
+            category: cat.label,
+            expenseType: '',
+            amount: '',
+            fileName: f.name,
+            contentHash: f._contentHash || ''
+          };
+        } else {
           const amt = parseFloat(f._amount) || 0;
           if(amt === 0) continue;
-
-          const payload = {
+          payload = {
             action: 'recordExpense',
             year, month,
             business: bizName,
@@ -1265,20 +1278,21 @@ async function saveToCloud(bi){
             fileName: f.name,
             contentHash: f._contentHash || ''
           };
-          if(f.type && f.type.startsWith('image/')){
-            const imgBytes = new Uint8Array(await f.arrayBuffer());
-            payload.imageBase64 = arrayBufferToBase64(imgBytes);
-            payload.imageType = f.type;
-          }
-
-          await fetch(url, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: {'Content-Type': 'text/plain'},
-            body: JSON.stringify(payload)
-          });
-          recorded++;
         }
+
+        if(f.type && f.type.startsWith('image/')){
+          const imgBytes = new Uint8Array(await f.arrayBuffer());
+          payload.imageBase64 = arrayBufferToBase64(imgBytes);
+          payload.imageType = f.type;
+        }
+
+        await fetch(url, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {'Content-Type': 'text/plain'},
+          body: JSON.stringify(payload)
+        });
+        recorded++;
       }
 
       pending.forEach(f => { f._cloudUploaded = true; });
