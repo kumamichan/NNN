@@ -1220,7 +1220,6 @@ async function saveToCloud(bi){
 
   let uploaded = 0;
   let recorded = 0;
-  const items = [];
   try{
     for(const cat of CATEGORIES){
       // 「まだクラウドに送っていない写真」だけを対象にPDF化してアップロードする。
@@ -1249,12 +1248,16 @@ async function saveToCloud(bi){
         uploaded++;
       }
 
-      // 2) スプレッドシート記録用のデータを集める（まだ送信はせず、後でまとめて1回で送る）
+      // 2) レシート1件ずつ、画像付きでスプレッドシートに記録する
       //    通帳コピーは金額・経費科目の概念が無いので、その2つは空欄のまま画像だけ記録する
       for(const f of pending){
-        let item;
+        let payload;
         if(cat.id === 'passbook'){
-          item = {
+          payload = {
+            action: 'recordExpense',
+            year, month,
+            business: bizName,
+            bizSlot: bi,
             category: cat.label,
             expenseType: '',
             amount: '',
@@ -1264,7 +1267,11 @@ async function saveToCloud(bi){
         } else {
           const amt = parseFloat(f._amount) || 0;
           if(amt === 0) continue;
-          item = {
+          payload = {
+            action: 'recordExpense',
+            year, month,
+            business: bizName,
+            bizSlot: bi,
             category: cat.label,
             expenseType: f._expenseType || 'その他',
             amount: amt,
@@ -1275,37 +1282,22 @@ async function saveToCloud(bi){
 
         if(f.type && f.type.startsWith('image/')){
           const imgBytes = new Uint8Array(await f.arrayBuffer());
-          item.imageBase64 = arrayBufferToBase64(imgBytes);
-          item.imageType = f.type;
+          payload.imageBase64 = arrayBufferToBase64(imgBytes);
+          payload.imageType = f.type;
         }
 
-        items.push(item);
-      }
+        statusEl.textContent = `スプレッドシートに記録しています（${recorded + 1}件目）...`;
 
-      pending.forEach(f => { f._cloudUploaded = true; });
-    }
-
-    // 3) 集めたデータを、5件ずつのまとまりに分けて送信する
-    //    （1回に全部だと通信量が大きくなりすぎて固まることがあるため、適度な件数ごとに分割する）
-    const CHUNK_SIZE = 5;
-    if(items.length > 0){
-      for(let i = 0; i < items.length; i += CHUNK_SIZE){
-        const chunk = items.slice(i, i + CHUNK_SIZE);
-        statusEl.textContent = `スプレッドシートに記録しています（${Math.min(i + CHUNK_SIZE, items.length)}/${items.length}件）...`;
         await fetch(url, {
           method: 'POST',
           mode: 'no-cors',
           headers: {'Content-Type': 'text/plain'},
-          body: JSON.stringify({
-            action: 'recordExpenseBatch',
-            year, month,
-            business: bizName,
-            bizSlot: bi,
-            items: chunk
-          })
+          body: JSON.stringify(payload)
         });
+        recorded++;
       }
-      recorded = items.length;
+
+      pending.forEach(f => { f._cloudUploaded = true; });
     }
   } catch(e){
     statusEl.className = 'status-line error';
