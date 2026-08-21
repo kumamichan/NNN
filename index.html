@@ -1285,20 +1285,26 @@ async function saveToCloud(bi){
       pending.forEach(f => { f._cloudUploaded = true; });
     }
 
-    // 3) 集めたデータをまとめて1回のリクエストでスプレッドシートに記録する
+    // 3) 集めたデータを、5件ずつのまとまりに分けて送信する
+    //    （1回に全部だと通信量が大きくなりすぎて固まることがあるため、適度な件数ごとに分割する）
+    const CHUNK_SIZE = 5;
     if(items.length > 0){
-      await fetch(url, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {'Content-Type': 'text/plain'},
-        body: JSON.stringify({
-          action: 'recordExpenseBatch',
-          year, month,
-          business: bizName,
-          bizSlot: bi,
-          items
-        })
-      });
+      for(let i = 0; i < items.length; i += CHUNK_SIZE){
+        const chunk = items.slice(i, i + CHUNK_SIZE);
+        statusEl.textContent = `スプレッドシートに記録しています（${Math.min(i + CHUNK_SIZE, items.length)}/${items.length}件）...`;
+        await fetch(url, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {'Content-Type': 'text/plain'},
+          body: JSON.stringify({
+            action: 'recordExpenseBatch',
+            year, month,
+            business: bizName,
+            bizSlot: bi,
+            items: chunk
+          })
+        });
+      }
       recorded = items.length;
     }
   } catch(e){
