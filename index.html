@@ -1163,6 +1163,12 @@ function updateType(bi, catId, fi, val){
   updateSummary(bi);
 }
 
+function fetchWithTimeout(url, options, timeoutMs){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, {...options, signal: controller.signal}).finally(() => clearTimeout(timer));
+}
+
 function arrayBufferToBase64(bytes){
   let binary = '';
   const chunkSize = 0x8000;
@@ -1248,16 +1254,13 @@ async function saveToCloud(bi){
         uploaded++;
       }
 
-      // 2) レシート1件ずつ、画像付きでスプレッドシートに記録する
+      // 2) レシートを、画像付きでスプレッドシートに記録する準備をする
       //    通帳コピーは金額・経費科目の概念が無いので、その2つは空欄のまま画像だけ記録する
+      const items = [];
       for(const f of pending){
-        let payload;
+        let item;
         if(cat.id === 'passbook'){
-          payload = {
-            action: 'recordExpense',
-            year, month,
-            business: bizName,
-            bizSlot: bi,
+          item = {
             category: cat.label,
             expenseType: '',
             amount: '',
@@ -1267,11 +1270,7 @@ async function saveToCloud(bi){
         } else {
           const amt = parseFloat(f._amount) || 0;
           if(amt === 0) continue;
-          payload = {
-            action: 'recordExpense',
-            year, month,
-            business: bizName,
-            bizSlot: bi,
+          item = {
             category: cat.label,
             expenseType: f._expenseType || 'その他',
             amount: amt,
@@ -1282,19 +1281,52 @@ async function saveToCloud(bi){
 
         if(f.type && f.type.startsWith('image/')){
           const imgBytes = new Uint8Array(await f.arrayBuffer());
-          payload.imageBase64 = arrayBufferToBase64(imgBytes);
-          payload.imageType = f.type;
+          item.imageBase64 = arrayBufferToBase64(imgBytes);
+          item.imageType = f.type;
         }
 
-        statusEl.textContent = `スプレッドシートに記録しています（${recorded + 1}件目）...`;
+        items.push(item);
+      }
 
-        await fetch(url, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {'Content-Type': 'text/plain'},
-          body: JSON.stringify(payload)
-        });
-        recorded++;
+      // 3件ずつのまとまりに分けて送信する（1件ずつだと遅く、全部一気だと固まるため、ちょうど良い件数で分割）
+      const CHUNK_SIZE = 3;
+      for(let i = 0; i < items.length; i += CHUNK_SIZE){
+        const chunk = items.slice(i, i + CHUNK_SIZE);
+        statusEl.textContent = `スプレッドシートに記録しています（${Math.min(i + CHUNK_SIZE, items.length)}/${items.length}件）...`;
+
+        let sent = false;
+        for(let attempt = 0; attempt < 2 && !sent; attempt++){
+          try{
+            await fetchWithTimeout(url, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: {'Content-Type': 'text/plain'},
+              body: JSON.stringify({
+                action: 'recordExpenseBatch',
+                year, month,
+                business: bizName,
+                bizSlot: bi,
+                items: chunk
+              })
+            }, 25000);
+            sent = true;
+          } catch(retryErr){
+            if(attempt === 0){
+              statusEl.textContent = `通信が不安定なため再試行しています（${Math.min(i + CHUNK_SIZE, items.length)}/${items.length}件）...`;
+            }
+          }
+        }
+
+        if(!sent){
+          // ここで完全に諦める。止まったまま待たせ続けない。
+          if(btn){ btn.disabled = false; btn.textContent = 'クラウドに保存する'; }
+          renderPanels();
+          switchTab(activeTab);
+          document.getElementById('status'+bi).className = 'status-line error';
+          document.getElementById('status'+bi).textContent = `通信エラーのため、${i}件目までで中断しました。もう一度「クラウドに保存する」を押してください（記録済みの分は重複せず、続きから送られます）。`;
+          return;
+        }
+        recorded += chunk.length;
       }
 
       pending.forEach(f => { f._cloudUploaded = true; });
