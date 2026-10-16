@@ -1295,26 +1295,23 @@ async function saveToCloud(bi){
         statusEl.textContent = `スプレッドシートに記録しています（${Math.min(i + CHUNK_SIZE, items.length)}/${items.length}件）...`;
 
         let sent = false;
-        for(let attempt = 0; attempt < 2 && !sent; attempt++){
-          try{
-            await fetchWithTimeout(url, {
-              method: 'POST',
-              mode: 'no-cors',
-              headers: {'Content-Type': 'text/plain'},
-              body: JSON.stringify({
-                action: 'recordExpenseBatch',
-                year, month,
-                business: bizName,
-                bizSlot: bi,
-                items: chunk
-              })
-            }, 25000);
-            sent = true;
-          } catch(retryErr){
-            if(attempt === 0){
-              statusEl.textContent = `通信が不安定なため再試行しています（${Math.min(i + CHUNK_SIZE, items.length)}/${items.length}件）...`;
-            }
-          }
+        try{
+          await fetchWithTimeout(url, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {'Content-Type': 'text/plain'},
+            body: JSON.stringify({
+              action: 'recordExpenseBatch',
+              year, month,
+              business: bizName,
+              bizSlot: bi,
+              items: chunk
+            })
+          }, 30000);
+          sent = true;
+        } catch(timeoutErr){
+          // 自動では再送信しない（前の処理がGAS側でまだ動いている可能性があるため、
+          // 二重に走らせて余計に重くしないよう、ここで一度確実に止める）
         }
 
         if(!sent){
